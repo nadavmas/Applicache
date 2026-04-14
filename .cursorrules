@@ -1,0 +1,4 @@
+# Core Principles
+
+- ALWAYS read `MEMORY_BANK.md` before implementing new features, suggesting architecture changes, or writing core logic.
+- NEVER modify `MEMORY_BANK.md` unless I explicitly instruct you to do so.
