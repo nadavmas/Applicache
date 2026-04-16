@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+---
+# Design & UI/UX Guidelines
+
+These guidelines apply to the React SPA.
+
+- **Design Language:** The UI must be highly minimalist, clean, and premium, heavily inspired by Apple's design system. Use ample whitespace, clean typography, rounded corners, and subtle borders/shadows.
+
+- **Visuals:** Prefer a modern, sleek color palette (e.g., clean whites/grays with a single pop of accent color). Avoid visual clutter.
+
+- **Animations & Interactivity:** Incorporate subtle, smooth, and purposeful animations for all user interactions (e.g., hover states, page transitions, modal appearances, loading states). You may suggest lightweight libraries like Framer Motion, but ensure animations are quick and fluid, never exaggerated.

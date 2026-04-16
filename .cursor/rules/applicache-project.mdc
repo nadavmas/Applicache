@@ -1,3 +1,8 @@
+---
+description: Core project principles and MEMORY_BANK usage
+alwaysApply: true
+---
+
 # Core Principles
 
 - ALWAYS read `MEMORY_BANK.md` before implementing new features, suggesting architecture changes, or writing core logic.
