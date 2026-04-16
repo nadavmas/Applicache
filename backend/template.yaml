@@ -98,6 +98,70 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
 
+  ApplicacheRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-rest"
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'http://localhost:5173'"
+      Auth:
+        DefaultAuthorizer: MyCognitoAuthorizer
+        # REST SAM: singular Authorizer. Do not use HttpApi AddDefaultAuthorizersToCorsPreflight (invalid here).
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          MyCognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+            Identity:
+              Header: Authorization
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'http://localhost:5173'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'http://localhost:5173'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+
+  BoardsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-Boards"
+      Description: List and create boards (single-table PK/SK)
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/boards/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppliCacheData
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:PutItem
+              Resource: !GetAtt AppliCacheData.Arn
+      Events:
+        ListBoards:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards
+            Method: GET
+        CreateBoard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards
+            Method: POST
+
 Outputs:
   AppliCacheDataTableName:
     Description: Single-table DynamoDB name (PK/SK)
@@ -116,3 +180,9 @@ Outputs:
     Value: !GetAtt PostConfirmationFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-PostConfirmationFunctionArn"
+
+  RestApiUrl:
+    Description: REST API base URL including stage (set VITE_API_URL in frontend, no trailing slash)
+    Value: !Sub https://${ApplicacheRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+    Export:
+      Name: !Sub "${AWS::StackName}-RestApiUrl"

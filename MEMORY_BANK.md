@@ -45,8 +45,10 @@ AppliCache provides:
 - **AWS Lambda**
   - Business logic and request handling
   - Validation and data access orchestration
+  - Post Confirmation trigger: after email verification, writes the user profile into DynamoDB (single-table keys `USER#<sub>` / `PROFILE#<sub>`)
 - **Amazon DynamoDB**
   - Persistent storage for application records
+  - Single-table design (`AppliCacheData` with `PK` / `SK`); user profiles and future entities share one table
 - **Amazon S3 + CloudFront (or Amplify Hosting)**
   - Frontend SPA hosting
 
@@ -104,6 +106,28 @@ Update this section only when explicitly requested.
 | Added `/dashboard` route, `DashboardPage` (auth gate, welcome, sign out), and `LandingPage` redirect to dashboard when already signed in. | 2026-04-16 | Baseline authenticated shell for post-login UX. |
 | Implemented sign-up with profile fields, email verification (`confirmSignUp`), and resend code; wired `SignupPage` to Cognito. | 2026-04-16 | Registration path aligned with pool required attributes. |
 | Implemented sign-in restricted to **email only** (`LoginPage` + validation); Cognito `loginWith`: `email: true`, `username: false`; sign-in uses verified email as Amplify `username` parameter. | 2026-04-16 | Avoids username-vs-alias confusion; simplified login UX. |
+| Stopped ignoring `MEMORY_BANK.md` in `.gitignore` so the memory bank is tracked in git. | 2026-04-16 | Keeps product/design history with the repo. |
+| Merged `feature/user-handling` into `main` and pushed to `origin` (includes Cognito integration and dashboard shell). | 2026-04-16 | Remote `main` updated to match integrated feature work. |
+| Redesigned global SPA styles in `frontend/src/styles.css` (design tokens, subtle motion, `prefers-reduced-motion`, landing/auth/dashboard polish); removed unused `frontend/src/style.css`; replaced inline styles with utility classes where appropriate; `frontend/src/main.ts` now imports `styles.css` if used. | 2026-04-16 | Cleaner, Apple-inspired UI; no new runtime deps. |
+| Added `AppliCacheData` DynamoDB table to `backend/template.yaml` (partition key `PK`, sort key `SK`, on-demand billing) with stack outputs for name and ARN. | 2026-04-16 | Establishes single-table storage for profiles and future application entities. |
+| Implemented Cognito **Post Confirmation** Lambda at `backend/functions/postConfirmation/` (Node.js 20, AWS SDK v3 `PutItem`); profile item shape `PK` = `USER#<sub>`, `SK` = `PROFILE#<sub>` with email, names, birthdate, username, `createdAt`. Wired IAM (`dynamodb:PutItem` on table only), `AWS::Lambda::Permission` for `cognito-idp.amazonaws.com`, and `CognitoUserPool.LambdaConfig.PostConfirmation` in SAM. | 2026-04-16 | Confirmed users get a profile row automatically after email verification. |
+| Added root `.gitignore` entry `node_modules/` (covers frontend and packaged Lambda dependencies). | 2026-04-16 | Avoids committing installed packages. |
+
+### Recent work log (since last backlog snapshot)
+
+Entries below mirror the table above in narrative form for quick scanning.
+
+**2026-04-16 — Repository**
+
+- Removed `MEMORY_BANK.md` from `.gitignore` and merged `feature/user-handling` into `main`, then pushed so the memory bank and integrated auth/dashboard work live on `origin/main`.
+
+**2026-04-16 — Frontend**
+
+- Shipped a CSS-first UI pass: expanded tokens, backgrounds, button/input focus and hover behavior, staggered hero entry animation where appropriate, loading state with dot pulse, and glass-style auth card; deleted the orphaned `style.css` asset and consolidated on `styles.css`.
+
+**2026-04-16 — Backend / AWS**
+
+- Defined the single DynamoDB table `AppliCacheData` in SAM and deployed the Post Confirmation Lambda that persists `USER#<sub>` / `PROFILE#<sub>` items after successful sign-up confirmation, with least-privilege IAM and Cognito invoke permission.
 
 ## Update Policy
 
