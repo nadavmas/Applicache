@@ -350,8 +350,7 @@ export default function DashboardPage() {
                   aria-label="Save new table"
                 >
                   <p className="dashboard-draft-save__hint">
-                    Save this table to store it in your account. You can add
-                    entries after saving.
+                    Press Create and start caching your applications!
                   </p>
                   {saveBoardError ? (
                     <p
@@ -363,14 +362,12 @@ export default function DashboardPage() {
                   ) : null}
                   <button
                     type="button"
-                    className="btn btn-primary dashboard-draft-save__btn"
+                    className="dashboard-draft-save__btn"
                     onClick={() => handleSaveDraftBoard(activeBoard.id)}
                     disabled={savingBoardId === activeBoard.id}
                     aria-busy={savingBoardId === activeBoard.id ? "true" : undefined}
                   >
-                    {savingBoardId === activeBoard.id
-                      ? "Saving…"
-                      : "Create new table"}
+                    {savingBoardId === activeBoard.id ? "Saving…" : "Create"}
                   </button>
                 </div>
               ) : null}

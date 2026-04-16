@@ -127,15 +127,6 @@ export default function BoardTableView({
         </table>
       </div>
 
-      {!persisted ? (
-        <div className="board-table__draft-hint">
-          <p className="board-table__draft-hint-text">
-            Use <strong>Create new table</strong> below to save this draft to
-            your account. Then you can add entries.
-          </p>
-        </div>
-      ) : null}
-
       {persisted && !entriesEnabled ? (
         <div className="board-table__entries-gate">
           <p className="board-table__entries-gate-text">
@@ -144,7 +135,7 @@ export default function BoardTableView({
           </p>
           <button
             type="button"
-            className="board-table__create-confirm btn btn-primary"
+            className="dashboard-accent-btn"
             onClick={onEnableEntries}
           >
             Start adding entries
