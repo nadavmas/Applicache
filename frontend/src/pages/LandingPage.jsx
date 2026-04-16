@@ -22,8 +22,17 @@ export default function LandingPage() {
   if (status === "checking") {
     return (
       <main className="landing-page">
-        <p className="hero" style={{ textAlign: "center", color: "#64748b" }}>
-          Loading…
+        <p
+          className="hero__loading page-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="page-loading__label">Loading</span>
+          <span className="page-loading__dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
         </p>
       </main>
     );

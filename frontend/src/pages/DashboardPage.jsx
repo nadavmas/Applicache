@@ -45,8 +45,17 @@ export default function DashboardPage() {
   if (status === "checking") {
     return (
       <main className="landing-page">
-        <p className="hero" style={{ textAlign: "center", color: "#64748b" }}>
-          Loading…
+        <p
+          className="hero__loading page-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="page-loading__label">Loading</span>
+          <span className="page-loading__dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
         </p>
       </main>
     );
@@ -65,15 +74,15 @@ export default function DashboardPage() {
             ? `Welcome back, ${displayName}.`
             : "Welcome to your AppliCache home."}
         </p>
-        <p style={{ fontSize: "1rem", color: "#64748b", marginTop: 16 }}>
+        <p className="hero__meta">
           Your applications overview will appear here.
         </p>
         {logoutError ? (
-          <p className="auth-form-error" role="alert" style={{ marginTop: 16 }}>
+          <p className="auth-form-error auth-form-error--spaced" role="alert">
             {logoutError}
           </p>
         ) : null}
-        <div className="hero-actions" style={{ marginTop: 24 }}>
+        <div className="hero-actions hero-actions--spaced">
           <button
             type="button"
             className="btn btn-secondary"

@@ -216,13 +216,6 @@ export default function SignupPage() {
             <button
               type="button"
               className="auth-link"
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                font: "inherit",
-              }}
               onClick={() => {
                 setUiStep("signup");
                 setVerificationCode("");
@@ -244,7 +237,7 @@ export default function SignupPage() {
             </p>
           ) : null}
           {resendMessage ? (
-            <p className="auth-card__subtitle" style={{ margin: "0 0 8px" }}>
+            <p className="auth-card__subtitle auth-card__subtitle--compact">
               {resendMessage}
             </p>
           ) : null}
@@ -292,18 +285,11 @@ export default function SignupPage() {
             {verifySubmitting ? "Verifying…" : "Verify and continue"}
           </button>
 
-          <p className="auth-footer" style={{ border: "none", marginTop: 12 }}>
+          <p className="auth-footer auth-footer--flush">
             Didn&apos;t get a code?{" "}
             <button
               type="button"
               className="auth-link"
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                font: "inherit",
-              }}
               onClick={handleResendCode}
               disabled={resending || verifySubmitting}
             >
