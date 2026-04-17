@@ -1213,6 +1213,26 @@ button.auth-link {
   min-width: 8rem;
 }
 
+.board-table__cell-text {
+  display: block;
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  min-width: 8rem;
+  min-height: 2.625rem;
+  line-height: 1.35;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.board-table__save-error {
+  margin-top: var(--space-3);
+}
+
+.board-table__td--save {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .board-table__add-row {
   transition:
     border-color var(--duration-fast) var(--ease-out),

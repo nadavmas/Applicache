@@ -148,6 +148,7 @@ Resources:
                 - dynamodb:Query
                 - dynamodb:GetItem
                 - dynamodb:PutItem
+                - dynamodb:UpdateItem
               Resource: !GetAtt AppliCacheData.Arn
       Events:
         ListBoards:
@@ -167,6 +168,12 @@ Resources:
           Properties:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards
+            Method: POST
+        AddBoardEntry:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/entries
             Method: POST
 
 Outputs:

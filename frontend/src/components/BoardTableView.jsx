@@ -10,6 +10,9 @@ import { useRef, useState } from "react"
  * @param {(name: string) => void} props.onAddColumn
  * @param {() => void} props.onAddRow
  * @param {(rowId: string, columnId: string, value: string) => void} props.onCellChange
+ * @param {(rowId: string) => void} [props.onSaveRow]
+ * @param {string | null} [props.savingRowId]
+ * @param {string} [props.saveRowError]
  */
 export default function BoardTableView({
   board,
@@ -20,12 +23,26 @@ export default function BoardTableView({
   onAddColumn,
   onAddRow,
   onCellChange,
+  onSaveRow,
+  savingRowId,
+  saveRowError,
 }) {
   const [isAddingColumn, setIsAddingColumn] = useState(false)
   const [newColumnName, setNewColumnName] = useState("")
   const columnCancelRef = useRef(false)
 
   const showAddColumn = !columnsLocked
+  /** Show entry rows / Add row when entry mode is on or the board already has saved rows */
+  const entriesVisible =
+    entriesEnabled || (Boolean(persisted) && board.rows.length > 0)
+  const showEntriesGate =
+    Boolean(persisted) &&
+    !entriesEnabled &&
+    board.rows.length === 0
+  const showSaveColumn =
+    Boolean(persisted) &&
+    entriesEnabled &&
+    board.rows.some((r) => r.pendingSave === true)
 
   const finishColumnInput = (value) => {
     const trimmed = value.trim()
@@ -53,6 +70,18 @@ export default function BoardTableView({
       return
     }
     finishColumnInput(e.currentTarget.value)
+  }
+
+  const handleDraftCellKeyDown = (rowId) => (e) => {
+    if (e.key !== "Enter") return
+    e.preventDefault()
+    if (savingRowId != null || !onSaveRow) return
+    onSaveRow(rowId)
+  }
+
+  const handleSaveClick = (rowId) => () => {
+    if (savingRowId != null || !onSaveRow) return
+    onSaveRow(rowId)
   }
 
   return (
@@ -95,23 +124,40 @@ export default function BoardTableView({
                   )}
                 </th>
               ) : null}
+              {showSaveColumn ? (
+                <th
+                  className="board-table__th board-table__th--action"
+                  scope="col"
+                  aria-label="Row actions"
+                />
+              ) : null}
             </tr>
           </thead>
           <tbody>
-            {entriesEnabled
+            {entriesVisible
               ? board.rows.map((row, rowIndex) => (
                   <tr key={row.id} className="board-table__tr">
                     {board.columns.map((col) => (
                       <td key={col.id} className="board-table__td">
-                        <input
-                          type="text"
-                          className="board-table__cell-input auth-input"
-                          value={row.cells[col.id] ?? ""}
-                          onChange={(e) =>
-                            onCellChange(row.id, col.id, e.target.value)
-                          }
-                          aria-label={`${col.name}, row ${rowIndex + 1}`}
-                        />
+                        {row.pendingSave ? (
+                          <input
+                            type="text"
+                            className="board-table__cell-input auth-input"
+                            value={row.cells[col.id] ?? ""}
+                            onChange={(e) =>
+                              onCellChange(row.id, col.id, e.target.value)
+                            }
+                            onKeyDown={handleDraftCellKeyDown(row.id)}
+                            aria-label={`${col.name}, row ${rowIndex + 1}`}
+                          />
+                        ) : (
+                          <span
+                            className="board-table__cell-text"
+                            aria-label={`${col.name}, row ${rowIndex + 1}`}
+                          >
+                            {row.cells[col.id] ?? ""}
+                          </span>
+                        )}
                       </td>
                     ))}
                     {showAddColumn ? (
@@ -120,6 +166,26 @@ export default function BoardTableView({
                         aria-hidden="true"
                       />
                     ) : null}
+                    {showSaveColumn ? (
+                      <td className="board-table__td board-table__td--save">
+                        {row.pendingSave ? (
+                          <button
+                            type="button"
+                            className="dashboard-accent-btn"
+                            onClick={handleSaveClick(row.id)}
+                            disabled={savingRowId != null}
+                            aria-busy={
+                              savingRowId === row.id ? "true" : undefined
+                            }
+                            aria-label={`Save row ${rowIndex + 1}`}
+                          >
+                            {savingRowId === row.id ? "Saving…" : "Save"}
+                          </button>
+                        ) : (
+                          <span aria-hidden="true" />
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               : null}
@@ -127,7 +193,13 @@ export default function BoardTableView({
         </table>
       </div>
 
-      {persisted && !entriesEnabled ? (
+      {saveRowError && showSaveColumn ? (
+        <p className="auth-form-error board-table__save-error" role="alert">
+          {saveRowError}
+        </p>
+      ) : null}
+
+      {showEntriesGate ? (
         <div className="board-table__entries-gate">
           <p className="board-table__entries-gate-text">
             Press the button below when you are ready to add entries to this
@@ -143,7 +215,7 @@ export default function BoardTableView({
         </div>
       ) : null}
 
-      {persisted && entriesEnabled ? (
+      {persisted && entriesVisible ? (
         <button
           type="button"
           className="board-table__add-row btn btn-secondary"

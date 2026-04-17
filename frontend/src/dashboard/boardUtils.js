@@ -1,5 +1,5 @@
 /** @typedef {{ id: string, name: string }} Column */
-/** @typedef {{ id: string, cells: Record<string, string> }} Row */
+/** @typedef {{ id: string, cells: Record<string, string>, pendingSave?: boolean }} Row */
 /** @typedef {{
  *   id: string,
  *   name: string,
@@ -78,6 +78,7 @@ const normalizeRows = (raw, columns) => {
       return {
         id: newId(),
         cells: Object.fromEntries(columns.map((c) => [c.id, ""])),
+        pendingSave: false,
       }
     }
     const id = typeof r.id === "string" && r.id ? r.id : newId()
@@ -94,7 +95,7 @@ const normalizeRows = (raw, columns) => {
     for (const c of columns) {
       if (cells[c.id] === undefined) cells[c.id] = ""
     }
-    return { id, cells }
+    return { id, cells, pendingSave: false }
   })
 }
 
@@ -113,12 +114,13 @@ export const boardFromServer = (server) => {
   const boardName = server.boardName ?? ""
   const columns = normalizeColumns(server.columns)
   const rows = normalizeRows(server.rows, columns)
+  const hasEntries = rows.length > 0
   return {
     id: boardId,
     name: boardName,
     columns,
     rows,
-    entriesEnabled: false,
+    entriesEnabled: hasEntries,
     persisted: true,
     columnsLocked: true,
   }
@@ -150,7 +152,7 @@ export const addRowToBoard = (board) => {
   const cells = Object.fromEntries(
     board.columns.map((c) => [c.id, ""]),
   )
-  const row = { id: newId(), cells }
+  const row = { id: newId(), cells, pendingSave: true }
   return {
     ...board,
     rows: [...board.rows, row],

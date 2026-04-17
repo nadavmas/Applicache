@@ -152,3 +152,42 @@ export const createBoard = async (boardName, columns) => {
   }
   return res.json()
 }
+
+/**
+ * Append a row entry to a persisted board (DynamoDB list_append).
+ * @param {string} boardId
+ * @param {{ cells: Record<string, string> }} entryData
+ * @returns {Promise<{
+ *   row: { id: string, cells: Record<string, string>, createdAt: string, updatedAt: string },
+ *   updatedAt: string,
+ * }>}
+ */
+export const addBoardEntry = async (boardId, entryData) => {
+  const base = getBaseUrl()
+  if (!base) {
+    throw new Error("VITE_API_URL is not set")
+  }
+  const idToken = await getIdToken()
+  if (!idToken) {
+    throw new Error("Not signed in")
+  }
+  const pathId = encodeURIComponent(boardId)
+  const res = await fetch(`${base}/boards/${pathId}/entries`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ cells: entryData.cells }),
+  })
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again.")
+  }
+  if (res.status === 404) {
+    throw new Error("Table not found.")
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorBody(res))
+  }
+  return res.json()
+}

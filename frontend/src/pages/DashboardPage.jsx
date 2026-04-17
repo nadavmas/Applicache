@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
 import { signOut } from "../auth/cognitoStub";
 import {
+  addBoardEntry,
   createBoard,
   getBoard,
   isBoardsApiConfigured,
@@ -36,6 +37,9 @@ export default function DashboardPage() {
 
   const [savingBoardId, setSavingBoardId] = useState(null);
   const [saveBoardError, setSaveBoardError] = useState("");
+
+  const [savingEntryRowId, setSavingEntryRowId] = useState(null);
+  const [saveEntryError, setSaveEntryError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +103,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setSaveBoardError("");
+    setSaveEntryError("");
   }, [activeBoardId]);
 
   const handleSelectBoard = (boardId) => {
@@ -254,12 +259,61 @@ export default function DashboardPage() {
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
       if (!b?.persisted || !b?.entriesEnabled) return prev;
+      const row = b.rows.find((r) => r.id === rowId);
+      if (!row?.pendingSave) return prev;
       return prev.map((x) =>
         x.id === activeBoardId
           ? updateCell(x, rowId, columnId, value)
           : x,
       );
     });
+  };
+
+  const handleSaveRow = (rowId) => {
+    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (savingEntryRowId) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted || !board.entriesEnabled) return;
+    const row = board.rows.find((r) => r.id === rowId);
+    if (!row?.pendingSave) return;
+
+    setSaveEntryError("");
+    setSavingEntryRowId(rowId);
+
+    const cells = Object.fromEntries(
+      board.columns.map((c) => [c.id, row.cells[c.id] ?? ""]),
+    );
+
+    addBoardEntry(board.id, { cells })
+      .then((data) => {
+        const apiRow = data.row;
+        setBoards((prev) =>
+          prev.map((b) => {
+            if (b.id !== board.id) return b;
+            return {
+              ...b,
+              rows: b.rows.map((r) =>
+                r.id === rowId
+                  ? {
+                      id: apiRow.id,
+                      cells: { ...apiRow.cells },
+                      pendingSave: false,
+                    }
+                  : r,
+              ),
+            };
+          }),
+        );
+        setSaveEntryError("");
+      })
+      .catch((err) => {
+        setSaveEntryError(
+          err instanceof Error ? err.message : "Could not save entry.",
+        );
+      })
+      .finally(() => {
+        setSavingEntryRowId(null);
+      });
   };
 
   const showDraftSaveBar =
@@ -342,6 +396,9 @@ export default function DashboardPage() {
                 onAddColumn={handleAddColumn}
                 onAddRow={handleAddRow}
                 onCellChange={handleCellChange}
+                onSaveRow={handleSaveRow}
+                savingRowId={savingEntryRowId}
+                saveRowError={saveEntryError}
               />
               {showDraftSaveBar ? (
                 <div

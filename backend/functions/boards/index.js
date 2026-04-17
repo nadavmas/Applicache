@@ -3,6 +3,7 @@ const {
   QueryCommand,
   GetItemCommand,
   PutItemCommand,
+  UpdateItemCommand,
 } = require("@aws-sdk/client-dynamodb")
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
 const { randomUUID } = require("crypto")
@@ -62,10 +63,49 @@ const sanitizeColumns = (raw) => {
   return out
 }
 
+/**
+ * Ensure cells keys match board column ids exactly; return normalized string map.
+ */
+const normalizeCellsForBoard = (columns, cellsRaw) => {
+  if (!cellsRaw || typeof cellsRaw !== "object" || Array.isArray(cellsRaw)) {
+    return { ok: false, message: "cells must be a non-array object" }
+  }
+  const columnIds = columns.map((c) => c.id)
+  const allowed = new Set(columnIds)
+  const keys = Object.keys(cellsRaw)
+  for (const k of keys) {
+    if (!allowed.has(k)) {
+      return {
+        ok: false,
+        message: `Unknown column id in cells: ${k}`,
+      }
+    }
+  }
+  for (const id of columnIds) {
+    if (!Object.prototype.hasOwnProperty.call(cellsRaw, id)) {
+      return {
+        ok: false,
+        message: `Missing column id in cells: ${id}`,
+      }
+    }
+  }
+  const out = {}
+  for (const id of columnIds) {
+    const v = cellsRaw[id]
+    out[id] = v == null ? "" : String(v)
+  }
+  return { ok: true, cells: out }
+}
+
 /** Map DynamoDB row to API row shape */
 const mapRowForApi = (r) => {
   if (!r || typeof r !== "object") return null
-  const id = typeof r.id === "string" ? r.id : null
+  const id =
+    typeof r.rowId === "string"
+      ? r.rowId
+      : typeof r.id === "string"
+        ? r.id
+        : null
   if (!id) return null
   const cells =
     r.cells && typeof r.cells === "object" && !Array.isArray(r.cells)
@@ -150,6 +190,11 @@ exports.handler = async (event) => {
   }
 
   if (method === "POST") {
+    const pathBoardId =
+      event.pathParameters?.boardId != null
+        ? String(event.pathParameters.boardId).trim()
+        : ""
+
     let payload = {}
     try {
       const raw = event.body ?? "{}"
@@ -159,6 +204,92 @@ exports.handler = async (event) => {
       payload = JSON.parse(text)
     } catch {
       return json(400, { message: "Invalid JSON body" })
+    }
+
+    if (pathBoardId) {
+      const cellsPayload = payload.cells
+      if (
+        !cellsPayload ||
+        typeof cellsPayload !== "object" ||
+        Array.isArray(cellsPayload)
+      ) {
+        return json(400, { message: "cells must be a non-array object" })
+      }
+
+      const getRes = await client.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: marshall({
+            PK: pk,
+            SK: `BOARD#${pathBoardId}`,
+          }),
+        }),
+      )
+      if (!getRes.Item) {
+        return json(404, { message: "Board not found" })
+      }
+      const boardRow = unmarshall(getRes.Item)
+      if (!String(boardRow.SK ?? "").startsWith("BOARD#")) {
+        return json(404, { message: "Board not found" })
+      }
+
+      const columns = sanitizeColumns(boardRow.columns)
+      if (columns.length === 0) {
+        return json(400, { message: "Board has no columns" })
+      }
+
+      const normalized = normalizeCellsForBoard(columns, cellsPayload)
+      if (!normalized.ok) {
+        return json(400, { message: normalized.message })
+      }
+
+      const rowId = randomUUID()
+      const now = new Date().toISOString()
+      const newEntry = {
+        rowId,
+        cells: normalized.cells,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      try {
+        await client.send(
+          new UpdateItemCommand({
+            TableName: tableName,
+            Key: marshall({
+              PK: pk,
+              SK: `BOARD#${pathBoardId}`,
+            }),
+            UpdateExpression:
+              "SET #rows = list_append(if_not_exists(#rows, :empty), :one), #updatedAt = :u",
+            ExpressionAttributeNames: {
+              "#rows": "rows",
+              "#updatedAt": "updatedAt",
+            },
+            ExpressionAttributeValues: marshall({
+              ":empty": [],
+              ":one": [newEntry],
+              ":u": now,
+            }),
+            ConditionExpression: "attribute_exists(PK) AND attribute_exists(SK)",
+          }),
+        )
+      } catch (e) {
+        if (e.name === "ConditionalCheckFailedException") {
+          return json(404, { message: "Board not found" })
+        }
+        throw e
+      }
+
+      return json(201, {
+        row: {
+          id: rowId,
+          cells: normalized.cells,
+          createdAt: now,
+          updatedAt: now,
+        },
+        updatedAt: now,
+      })
     }
 
     const boardName =
