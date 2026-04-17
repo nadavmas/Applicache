@@ -1115,6 +1115,199 @@ button.auth-link {
   max-width: 100%;
 }
 
+.board-table__board-header {
+  margin-bottom: var(--space-6);
+  width: 100%;
+  max-width: min(100%, 72rem);
+}
+
+.board-table__board-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.board-table__board-title-input {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+}
+
+.board-table__board-edit-input {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.5);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.board-table__board-edit-input:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.board-table__board-edit-input:focus {
+  outline: none;
+}
+
+.board-table__board-edit-input:focus-visible {
+  border-color: rgba(0, 113, 227, 0.45);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.board-table__th--board-menu {
+  position: relative;
+  vertical-align: middle;
+  text-align: right;
+}
+
+.board-actions {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+  vertical-align: middle;
+}
+
+.board-actions__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.board-actions__trigger:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.board-actions__trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.board-actions__more-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
+.board-actions__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 11rem;
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.board-actions__menu-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.board-actions__menu-item:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.board-actions__menu-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-ring);
+}
+
+.board-actions__menu-item--disabled,
+.board-actions__menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.board-table__header-edit-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.board-table__board-col-input {
+  flex: 1;
+  min-width: 3rem;
+  max-width: 12rem;
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+}
+
+.board-table__col-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.board-table__col-remove:hover {
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.board-table__col-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.board-table__col-remove-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  display: block;
+}
+
+.board-table__board-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .board-table-wrap--appear {
     animation: fade-in-up var(--duration-normal) var(--ease-out) both;
@@ -1379,6 +1572,15 @@ button.auth-link {
   min-width: 3rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
+}
+
+/** Spacer under board ⋯ column — no muted fill (matches row zebra like other data cells) */
+.board-table__td--board-menu-spacer {
+  width: 1%;
+  min-width: 2.25rem;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 
 .board-table__cell-input {

@@ -137,6 +137,35 @@ const buildBoardDto = (row) => {
   }
 }
 
+const MAX_COLUMNS = 64
+
+/**
+ * PATCH board body: columns[].name required (non-empty trim); columns[].id optional (UUID if blank).
+ */
+const normalizeColumnsFromPatchBody = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { ok: false, message: "columns must be a non-empty array" }
+  }
+  if (raw.length > MAX_COLUMNS) {
+    return { ok: false, message: `Too many columns (max ${MAX_COLUMNS})` }
+  }
+  const out = []
+  for (const c of raw) {
+    if (!c || typeof c !== "object") continue
+    const nameRaw = c.name != null ? String(c.name).trim() : ""
+    if (!nameRaw) {
+      return { ok: false, message: "Each column must have a non-empty name" }
+    }
+    const idRaw = c.id != null ? String(c.id).trim() : ""
+    const id = idRaw || randomUUID()
+    out.push({ id, name: nameRaw })
+  }
+  if (out.length === 0) {
+    return { ok: false, message: "columns must be a non-empty array" }
+  }
+  return { ok: true, columns: out }
+}
+
 exports.handler = async (event) => {
   const method = getHttpMethod(event)
 
@@ -312,7 +341,6 @@ exports.handler = async (event) => {
 
     const boardId = randomUUID()
     const now = new Date().toISOString()
-    const MAX_COLUMNS = 64
     const fromClient = sanitizeColumns(payload.columns).slice(0, MAX_COLUMNS)
     const columns =
       fromClient.length > 0 ? fromClient : buildDefaultColumns()
@@ -356,8 +384,8 @@ exports.handler = async (event) => {
         ? String(event.pathParameters.rowId).trim()
         : ""
 
-    if (!pathBoardId || !pathRowId) {
-      return json(400, { message: "boardId and rowId are required" })
+    if (!pathBoardId) {
+      return json(400, { message: "boardId is required" })
     }
 
     let payload = {}
@@ -371,6 +399,79 @@ exports.handler = async (event) => {
       return json(400, { message: "Invalid JSON body" })
     }
 
+    // PATCH /boards/{boardId} — board metadata (no rowId in path)
+    if (!pathRowId) {
+      const boardName =
+        typeof payload.boardName === "string"
+          ? payload.boardName.trim()
+          : ""
+      if (!boardName) {
+        return json(400, { message: "boardName is required" })
+      }
+      const colResult = normalizeColumnsFromPatchBody(payload.columns)
+      if (!colResult.ok) {
+        return json(400, { message: colResult.message })
+      }
+      const columns = colResult.columns
+
+      const getRes = await client.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: marshall({
+            PK: pk,
+            SK: `BOARD#${pathBoardId}`,
+          }),
+        }),
+      )
+      if (!getRes.Item) {
+        return json(404, { message: "Board not found" })
+      }
+      const boardRow = unmarshall(getRes.Item)
+      if (!String(boardRow.SK ?? "").startsWith("BOARD#")) {
+        return json(404, { message: "Board not found" })
+      }
+
+      const now = new Date().toISOString()
+      try {
+        await client.send(
+          new UpdateItemCommand({
+            TableName: tableName,
+            Key: marshall({
+              PK: pk,
+              SK: `BOARD#${pathBoardId}`,
+            }),
+            UpdateExpression:
+              "SET #boardName = :bn, #columns = :cols, #updatedAt = :u",
+            ExpressionAttributeNames: {
+              "#boardName": "boardName",
+              "#columns": "columns",
+              "#updatedAt": "updatedAt",
+            },
+            ExpressionAttributeValues: marshall({
+              ":bn": boardName,
+              ":cols": columns,
+              ":u": now,
+            }),
+            ConditionExpression: "attribute_exists(PK) AND attribute_exists(SK)",
+          }),
+        )
+      } catch (e) {
+        if (e.name === "ConditionalCheckFailedException") {
+          return json(404, { message: "Board not found" })
+        }
+        throw e
+      }
+
+      const updatedRow = {
+        ...boardRow,
+        boardName,
+        columns,
+        updatedAt: now,
+      }
+      return json(200, buildBoardDto(updatedRow))
+    }
+
+    // PATCH /boards/{boardId}/entries/{rowId}
     const cellsPayload = payload.cells
     if (
       !cellsPayload ||

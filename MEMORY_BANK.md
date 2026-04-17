@@ -124,6 +124,11 @@ Update this section only when explicitly requested.
 | **Edit board entries (PATCH)**: **`PATCH /boards/{boardId}/entries/{rowId}`** — API Gateway event **`UpdateBoardEntry`**; **`AllowMethods`** / **`Access-Control-Allow-Methods`** extended with **`PATCH`** on **`Cors`** and **`DEFAULT_4XX` / `DEFAULT_5XX`**. Lambda: read–modify–write — **`GetItem`**, locate row by **`rowId`** or legacy **`id`**, **`normalizeCellsForBoard`** (same rules as POST), replace row in **`rows`** array, **`UpdateItem`** **`SET`** **`#rows`**, **`#updatedAt`**; **`200`** **`{ row: { id, cells, createdAt, updatedAt }, updatedAt }`**. **`corsHeaders`** include **`PATCH`**. IAM unchanged (**`GetItem`** / **`UpdateItem`** already granted). SPA: **`updateBoardEntry`**, **`editingRowId`** + **`originalEditRowData`** snapshot for cancel, **`handleStartEditRow`** (revert prior row when switching edit target; block while **`savingEntryRowId`**), **`handleCancelEdit`**, **`handleUpdateRow`**, **`handleCellChange`** for drafts and active edit row; clear edit snapshot when **`activeBoardId`** changes; **`saveEntryError`** for add + update failures. **`BoardTableView`**: unified **`showRowActionsColumn`** (draft **Save** and/or saved-row actions), read-only vs edit vs draft rows, **Save** / **Cancel** in edit mode, **Escape** / **Enter** on edit inputs, disabled while **`savingRowId`** matches row. Styles: **`.board-table__tr--interactive`**, **`.board-table__edit-btn`**, **`.board-table__edit-actions`**, **`.board-table__cancel-edit`**, hover / **`focus-within`** / **`focus-visible`** for discoverability. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `styles.css`. |
 | **Board entry table: width follows columns; Edit as icon**: **`board-table-wrap`** and **`board-table-scroll`**: **`width: fit-content`**, **`max-width: 100%`** so the bordered table area sizes to column content instead of stretching the full dashboard column; **`board-table`**: **`width: auto`**, **`table-layout: auto`**. **`board-table__th--action`**: **`min-width`** reduced (e.g. **3rem**) so the actions column stays compact when only the edit control shows; column still grows for **Save** / **Save + Cancel**. **Edit** control: inline **square-pen** SVG (**`BoardEditIcon`**, **`stroke="currentColor"`**), visible label removed; **`aria-label`** on the button keeps **“Edit row …”** for assistive tech. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
 | **Delete board entries**: **`DELETE /boards/{boardId}/entries/{rowId}`** — SAM **`DeleteBoardEntry`**; CORS / **`GatewayResponses`** include **`DELETE`**. Lambda: **`GetItem`**, filter **`rows`** by **`rowId`** / **`id`**, **`404`** if board or row missing, **`UpdateItem`** **`SET`** **`rows`** + **`updatedAt`**, **`200`** **`{ updatedAt }`**. SPA: **`deleteBoardEntry`**, **`deletingRowId`**, **`window.confirm`**, local row removal; trash icon (**`BoardDeleteIcon`**) beside edit, red hover (**.board-table__delete-btn**); **`focusAfterDelete`** + **`requestAnimationFrame`** focus next row actions / **Add New Entry** / table region. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `styles.css`. |
+| **Board entry validation (no all-blank saves)**: At least one cell must be non-whitespace after trim before **Save** on new or edited rows. **`entryCellsHaveAtLeastOneFilledValue`** + **`ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE`** in **`boardUtils.js`**; **`handleSaveRow`** / **`handleUpdateRow`** guard; **Save** buttons disabled when all empty; Lambda **`cellsHaveAtLeastOneNonWhitespaceValue`** after **`normalizeCellsForBoard`** on **`POST …/entries`** and **`PATCH …/entries/{rowId}`** → **`400`**. **`setSavingEntryRowId`** only after validation passes (avoids stuck **Saving…**). | 2026-04-17 | `boardUtils.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `backend/functions/boards/index.js`. |
+| **Board table UI polish (post-delete)**: Removed **“No entries yet”** empty copy (it had briefly lived in-table, then below the bordered scroll, then was dropped per UX). **`.board-table__edit-btn`**: default icon color **`var(--muted)`** like **`.board-table__delete-btn`**, **`var(--accent)`** on hover for affordance. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
+| **Board metadata editing (PATCH `/boards/{boardId}`)**: SAM **`UpdateBoard`** event on **`BoardsFunction`** (**`PATCH`** + path **`/boards/{boardId}`**); CORS already included **`PATCH`**. Lambda **`PATCH`** split by path: **no `rowId`** → update board **`boardName`**, **`columns`**, **`updatedAt`** via **`UpdateItem`** (validate non-empty **`boardName`**, non-empty **`columns`** array, max **64**, each column **`name`** non-empty; assign **`randomUUID()`** when **`id`** missing/blank); **`200`** returns **`buildBoardDto`** merged in memory. **With `rowId`** → existing row PATCH unchanged. **`normalizeColumnsFromPatchBody`** helper; **`MAX_COLUMNS`** shared with create path. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`. |
+| **Board metadata editing (SPA)**: **`updateBoard(boardId, { boardName, columns })`** in **`boardsApi.js`** (**`PATCH`**, Bearer + JSON). **Dashboard**: **`isEditingBoard`**, **`boardEditDraft`**, **`savingBoardEdit`**, **`saveBoardEditError`**; **`boardForTable`** view model; **`canSaveBoardEdit`** (trimmed non-empty board name + every column name non-empty); **`handleSaveBoardEdit`** / cancel; **`handleAddColumn`** branches to append draft column when editing; **`handleRemove`** / rename column drafts; **`handleUpdateBoard`** merges **`boardFromServer`** into **`boards`**. **Mutual exclusion** on **Edit Board**: revert in-progress row edit (same as cancel), drop **`pendingSave`** draft rows, then open board edit. Row/cell/entry actions gated while **`isEditingBoard`**; **`activeBoardId`** change clears board edit state. | 2026-04-17 | `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`. |
+| **Board metadata editing (UI)**: Board title (**`h2`** / input) **above** the table; **⋯** board actions menu (**Edit Board** / **Delete Board** disabled, “coming soon”) in the **thead** row **aligned with column headers** (after data + optional **+** column, before row-actions column); empty body cell uses **`board-table__td--board-menu-spacer`** (no **`--pad`** muted fill) so the spacer matches row striping. Edit mode: column header inputs with **remove** (**`×`**) when **>1** column, **Save Changes** / **Cancel**, **`.board-table__board-edit-input`** hover/focus borders, **`.board-actions`** dropdown styles. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
 
 ### Recent work log (since last backlog snapshot)
 
@@ -203,6 +208,40 @@ Work in this stream builds on **`POST /boards/{boardId}/entries`** (documented a
 
 - **`DELETE /boards/{boardId}/entries/{rowId}`** removes one row from the board item’s **`rows`** list; CORS allows **`DELETE`** on gateway error responses.
 - **Dashboard**: **`deleteBoardEntry`**, **`handleDeleteRow`** with confirm, **`deletingRowId`** loading state, **`focusAfterDelete`** for **`focusAfterDeleteComplete`**; **`BoardTableView`** trash + edit row actions, **`data-board-row-index`** for focus target, **`tabIndex={-1}`** on **`board-table-scroll`** as fallback; when **`entriesEnabled`** and no rows, header-only table plus **+ Add New Entry**.
+
+**2026-04-17 — Board entry validation (non-empty saves)**
+
+- **SPA**: Users cannot submit a new or updated row unless at least one column has non-whitespace text; shared helper and inline **`saveEntryError`**; primary **Save** controls disabled when every field is blank; **`Enter`** still routes through the same validation.
+- **API**: Boards Lambda rejects all-blank **`cells`** maps with **`400`** for both **POST** (append entry) and **PATCH** (update entry).
+- **Bugfix**: **`setSavingEntryRowId`** runs only after validation succeeds so failed validation does not leave the row stuck in **Saving…**.
+
+**2026-04-17 — Board table copy & edit affordance**
+
+- **Empty state**: Removed the **“No entries yet”** line entirely so an empty board shows only the column header strip (inside the bordered scroll) and **+ Add New Entry**—no extra muted sentence.
+- **Edit vs delete styling**: Idle edit icon uses the same muted stroke as the trash control; hover tints the edit icon with the accent color and light blue background so it stays distinct from delete (red hover) without looking “always blue.”
+
+**2026-04-17 — Board metadata editing (name + columns)**
+
+- **API / IaC**  
+  - New route **`PATCH /boards/{boardId}`** (SAM **`UpdateBoard`**) on the existing REST API and **`BoardsFunction`**; same Cognito default authorizer and existing CORS (**`PATCH`** already allowed).  
+  - **`PATCH`** handler branches on **`pathParameters`**: if **`rowId`** is absent → **board metadata** update; if present → **row entry** update (unchanged).
+
+- **Lambda**  
+  - Board update: **`boardName`** and **`columns`** (required, validated); new column **`id`**s generated when blank; **DynamoDB** **`UpdateItem`** sets **`boardName`**, **`columns`**, **`updatedAt`**; **`rows`** not rewritten (**schema-on-read**: removed column ids simply disappear from the UI).  
+  - Response **`200`** with full **`buildBoardDto`** shape.
+
+- **Frontend API**  
+  - **`updateBoard`** mirrors other board calls (Bearer id token, **`Content-Type: application/json`**).
+
+- **Dashboard**  
+  - Local draft for board name and columns while editing; **Save** disabled until names validate (trimmed non-empty board title and every column name).  
+  - Entering **Edit Board** cancels an active **row** edit and removes unsaved **pending** draft rows so only one edit context is active.  
+  - After successful save, **`boardFromServer`** updates **`activeBoard`** and the sidebar list.
+
+- **Board table UI**  
+  - Board title remains above the grid; **⋯** menu sits in the **header row** with column titles (not beside the title).  
+  - Edit mode: rename board, rename/reorder/add/remove columns (minimum one column); **Delete Board** remains disabled in the menu.  
+  - **Fix**: spacer cell under the ⋯ column uses **`board-table__td--board-menu-spacer`** instead of **`board-table__td--pad`** so it does not inherit the muted gray background used for the **+** column spacer.
 
 ## Update Policy
 

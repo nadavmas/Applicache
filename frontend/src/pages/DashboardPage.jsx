@@ -9,6 +9,7 @@ import {
   getBoard,
   isBoardsApiConfigured,
   listBoards,
+  updateBoard,
   updateBoardEntry,
 } from "../api/boardsApi";
 import DashboardSidebar from "../components/DashboardSidebar";
@@ -50,6 +51,11 @@ export default function DashboardPage() {
 
   const [deletingRowId, setDeletingRowId] = useState(null);
   const [focusAfterDelete, setFocusAfterDelete] = useState(null);
+
+  const [isEditingBoard, setIsEditingBoard] = useState(false);
+  const [boardEditDraft, setBoardEditDraft] = useState(null);
+  const [savingBoardEdit, setSavingBoardEdit] = useState(false);
+  const [saveBoardEditError, setSaveBoardEditError] = useState("");
 
   const handleFocusAfterDeleteComplete = useCallback(() => {
     setFocusAfterDelete(null);
@@ -121,6 +127,9 @@ export default function DashboardPage() {
     setEditingRowId(null);
     setOriginalEditRowData(null);
     setFocusAfterDelete(null);
+    setIsEditingBoard(false);
+    setBoardEditDraft(null);
+    setSaveBoardEditError("");
   }, [activeBoardId]);
 
   const handleSelectBoard = (boardId) => {
@@ -239,8 +248,133 @@ export default function DashboardPage() {
   const activeBoard =
     boards.find((b) => b.id === activeBoardId) ?? null;
 
+  const canSaveBoardEdit =
+    Boolean(isEditingBoard && boardEditDraft) &&
+    boardEditDraft.name.trim().length > 0 &&
+    boardEditDraft.columns.length > 0 &&
+    boardEditDraft.columns.every((c) => c.name.trim().length > 0);
+
+  const boardForTable =
+    activeBoard && isEditingBoard && boardEditDraft
+      ? {
+          ...activeBoard,
+          name: boardEditDraft.name,
+          columns: boardEditDraft.columns,
+        }
+      : activeBoard;
+
+  const handleStartEditBoard = () => {
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted) return;
+
+    setBoards((prev) => {
+      const b = prev.find((x) => x.id === activeBoardId);
+      if (!b) return prev;
+      let rows = b.rows;
+      if (editingRowId && originalEditRowData?.rowId === editingRowId) {
+        rows = rows.map((r) =>
+          r.id === editingRowId
+            ? { ...r, cells: { ...originalEditRowData.cells } }
+            : r,
+        );
+      }
+      rows = rows.filter((r) => !r.pendingSave);
+      return prev.map((x) =>
+        x.id === activeBoardId ? { ...x, rows } : x,
+      );
+    });
+
+    setEditingRowId(null);
+    setOriginalEditRowData(null);
+    setSaveEntryError("");
+
+    setBoardEditDraft({
+      name: board.name,
+      columns: board.columns.map((c) => ({ ...c })),
+    });
+    setIsEditingBoard(true);
+    setSaveBoardEditError("");
+  };
+
+  const handleCancelBoardEdit = () => {
+    setIsEditingBoard(false);
+    setBoardEditDraft(null);
+    setSaveBoardEditError("");
+  };
+
+  const handleBoardTitleDraftChange = (value) => {
+    setBoardEditDraft((prev) => (prev ? { ...prev, name: value } : prev));
+  };
+
+  const handleBoardColumnDraftChange = (columnId, value) => {
+    setBoardEditDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map((c) =>
+          c.id === columnId ? { ...c, name: value } : c,
+        ),
+      };
+    });
+  };
+
+  const handleRemoveBoardColumnDraft = (columnId) => {
+    setBoardEditDraft((prev) => {
+      if (!prev || prev.columns.length <= 1) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.filter((c) => c.id !== columnId),
+      };
+    });
+  };
+
+  const handleUpdateBoard = () => {
+    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (!boardEditDraft || !canSaveBoardEdit) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted) return;
+
+    setSaveBoardEditError("");
+    setSavingBoardEdit(true);
+
+    updateBoard(board.id, {
+      boardName: boardEditDraft.name.trim(),
+      columns: boardEditDraft.columns.map((c) => ({
+        id: c.id,
+        name: c.name.trim(),
+      })),
+    })
+      .then((data) => {
+        const saved = boardFromServer(data);
+        setBoards((prev) =>
+          prev.map((b) => (b.id === saved.id ? saved : b)),
+        );
+        setIsEditingBoard(false);
+        setBoardEditDraft(null);
+        setSaveBoardEditError("");
+      })
+      .catch((err) => {
+        setSaveBoardEditError(
+          err instanceof Error ? err.message : "Could not update board.",
+        );
+      })
+      .finally(() => {
+        setSavingBoardEdit(false);
+      });
+  };
+
   const handleAddColumn = (columnName) => {
     if (!activeBoardId) return;
+    if (isEditingBoard && boardEditDraft) {
+      const trimmed = columnName.trim();
+      if (!trimmed) return;
+      setBoardEditDraft((prev) => {
+        if (!prev) return prev;
+        const col = { id: crypto.randomUUID(), name: trimmed };
+        return { ...prev, columns: [...prev.columns, col] };
+      });
+      return;
+    }
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
       if (!b || b.columnsLocked) return prev;
@@ -251,6 +385,7 @@ export default function DashboardPage() {
   };
 
   const handleEnableBoardEntries = (boardId) => {
+    if (isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === boardId);
       if (!b?.persisted) return prev;
@@ -261,7 +396,7 @@ export default function DashboardPage() {
   };
 
   const handleAddRow = () => {
-    if (!activeBoardId) return;
+    if (!activeBoardId || isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
       if (!b?.persisted || !b?.entriesEnabled) return prev;
@@ -272,7 +407,7 @@ export default function DashboardPage() {
   };
 
   const handleCellChange = (rowId, columnId, value) => {
-    if (!activeBoardId) return;
+    if (!activeBoardId || isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
       if (!b?.persisted || !b?.entriesEnabled) return prev;
@@ -290,7 +425,7 @@ export default function DashboardPage() {
   };
 
   const handleStartEditRow = (rowId) => {
-    if (!activeBoardId) return;
+    if (!activeBoardId || isEditingBoard) return;
     if (savingEntryRowId) return;
     if (deletingRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
@@ -351,7 +486,7 @@ export default function DashboardPage() {
   };
 
   const handleUpdateRow = (rowId) => {
-    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
     if (!board?.persisted || !board.entriesEnabled) return;
@@ -407,7 +542,7 @@ export default function DashboardPage() {
   };
 
   const handleSaveRow = (rowId) => {
-    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
     if (!board?.persisted || !board.entriesEnabled) return;
@@ -460,7 +595,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteRow = (rowId) => {
-    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId || deletingRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
     if (!board?.persisted || !board.entriesEnabled) return;
@@ -570,13 +705,22 @@ export default function DashboardPage() {
           ) : null}
           {activeBoard ? (
             <>
-              <h2 className="dashboard-main__board-title">{activeBoard.name}</h2>
               <BoardTableView
                 key={activeBoard.id}
-                board={activeBoard}
+                board={boardForTable ?? activeBoard}
                 persisted={activeBoard.persisted === true}
                 columnsLocked={activeBoard.columnsLocked === true}
                 entriesEnabled={activeBoard.entriesEnabled === true}
+                isEditingBoard={isEditingBoard}
+                canSaveBoardEdit={canSaveBoardEdit}
+                savingBoardEdit={savingBoardEdit}
+                saveBoardEditError={saveBoardEditError}
+                onBoardTitleChange={handleBoardTitleDraftChange}
+                onStartEditBoard={handleStartEditBoard}
+                onSaveBoardEdit={handleUpdateBoard}
+                onCancelBoardEdit={handleCancelBoardEdit}
+                onBoardColumnNameChange={handleBoardColumnDraftChange}
+                onRemoveBoardColumn={handleRemoveBoardColumnDraft}
                 onEnableEntries={() =>
                   handleEnableBoardEntries(activeBoard.id)
                 }

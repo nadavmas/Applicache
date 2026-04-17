@@ -169,6 +169,12 @@ Resources:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards
             Method: POST
+        UpdateBoard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}
+            Method: PATCH
         AddBoardEntry:
           Type: Api
           Properties:
