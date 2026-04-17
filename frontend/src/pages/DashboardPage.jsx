@@ -8,6 +8,7 @@ import {
   getBoard,
   isBoardsApiConfigured,
   listBoards,
+  updateBoardEntry,
 } from "../api/boardsApi";
 import DashboardSidebar from "../components/DashboardSidebar";
 import BoardTableView from "../components/BoardTableView";
@@ -40,6 +41,9 @@ export default function DashboardPage() {
 
   const [savingEntryRowId, setSavingEntryRowId] = useState(null);
   const [saveEntryError, setSaveEntryError] = useState("");
+
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [originalEditRowData, setOriginalEditRowData] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +108,8 @@ export default function DashboardPage() {
   useEffect(() => {
     setSaveBoardError("");
     setSaveEntryError("");
+    setEditingRowId(null);
+    setOriginalEditRowData(null);
   }, [activeBoardId]);
 
   const handleSelectBoard = (boardId) => {
@@ -260,13 +266,126 @@ export default function DashboardPage() {
       const b = prev.find((x) => x.id === activeBoardId);
       if (!b?.persisted || !b?.entriesEnabled) return prev;
       const row = b.rows.find((r) => r.id === rowId);
-      if (!row?.pendingSave) return prev;
+      const canEdit =
+        row?.pendingSave === true ||
+        (editingRowId === rowId && row && !row.pendingSave);
+      if (!canEdit) return prev;
       return prev.map((x) =>
         x.id === activeBoardId
           ? updateCell(x, rowId, columnId, value)
           : x,
       );
     });
+  };
+
+  const handleStartEditRow = (rowId) => {
+    if (!activeBoardId) return;
+    if (savingEntryRowId) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    const row = board?.rows.find((r) => r.id === rowId);
+    if (!board?.persisted || !row || row.pendingSave) return;
+
+    if (
+      editingRowId &&
+      editingRowId !== rowId &&
+      originalEditRowData?.rowId === editingRowId
+    ) {
+      setBoards((prev) =>
+        prev.map((b) => {
+          if (b.id !== activeBoardId) return b;
+          return {
+            ...b,
+            rows: b.rows.map((r) =>
+              r.id === editingRowId
+                ? { ...r, cells: { ...originalEditRowData.cells } }
+                : r,
+            ),
+          };
+        }),
+      );
+    }
+
+    setOriginalEditRowData({ rowId, cells: { ...row.cells } });
+    setEditingRowId(rowId);
+    setSaveEntryError("");
+  };
+
+  const handleCancelEdit = () => {
+    if (!activeBoardId || !editingRowId) {
+      setEditingRowId(null);
+      setOriginalEditRowData(null);
+      return;
+    }
+    if (originalEditRowData?.rowId !== editingRowId) {
+      setEditingRowId(null);
+      setOriginalEditRowData(null);
+      return;
+    }
+    setBoards((prev) =>
+      prev.map((b) => {
+        if (b.id !== activeBoardId) return b;
+        return {
+          ...b,
+          rows: b.rows.map((r) =>
+            r.id === editingRowId
+              ? { ...r, cells: { ...originalEditRowData.cells } }
+              : r,
+          ),
+        };
+      }),
+    );
+    setEditingRowId(null);
+    setOriginalEditRowData(null);
+  };
+
+  const handleUpdateRow = (rowId) => {
+    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (savingEntryRowId) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted || !board.entriesEnabled) return;
+    if (editingRowId !== rowId) return;
+    const row = board.rows.find((r) => r.id === rowId);
+    if (!row || row.pendingSave) return;
+
+    setSaveEntryError("");
+    setSavingEntryRowId(rowId);
+
+    const cells = Object.fromEntries(
+      board.columns.map((c) => [c.id, row.cells[c.id] ?? ""]),
+    );
+
+    updateBoardEntry(board.id, rowId, { cells })
+      .then((data) => {
+        const apiRow = data.row;
+        setBoards((prev) =>
+          prev.map((b) => {
+            if (b.id !== board.id) return b;
+            return {
+              ...b,
+              rows: b.rows.map((r) =>
+                r.id === rowId
+                  ? {
+                      id: apiRow.id,
+                      cells: { ...apiRow.cells },
+                      pendingSave: false,
+                    }
+                  : r,
+              ),
+            };
+          }),
+        );
+        setEditingRowId(null);
+        setOriginalEditRowData(null);
+        setSaveEntryError("");
+      })
+      .catch((err) => {
+        setSaveEntryError(
+          err instanceof Error ? err.message : "Could not update entry.",
+        );
+      })
+      .finally(() => {
+        setSavingEntryRowId(null);
+      });
   };
 
   const handleSaveRow = (rowId) => {
@@ -399,6 +518,10 @@ export default function DashboardPage() {
                 onSaveRow={handleSaveRow}
                 savingRowId={savingEntryRowId}
                 saveRowError={saveEntryError}
+                editingRowId={editingRowId}
+                onStartEditRow={handleStartEditRow}
+                onCancelEdit={handleCancelEdit}
+                onUpdateRow={handleUpdateRow}
               />
               {showDraftSaveBar ? (
                 <div

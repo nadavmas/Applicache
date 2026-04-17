@@ -18,7 +18,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": CORS_ORIGIN,
   "Access-Control-Allow-Headers":
     "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-  "Access-Control-Allow-Methods": "OPTIONS,GET,POST",
+  "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PATCH",
 }
 
 const json = (statusCode, body) => ({
@@ -331,6 +331,142 @@ exports.handler = async (event) => {
       updatedAt: now,
       columns,
       rows: [],
+    })
+  }
+
+  if (method === "PATCH") {
+    const pathBoardId =
+      event.pathParameters?.boardId != null
+        ? String(event.pathParameters.boardId).trim()
+        : ""
+    const pathRowId =
+      event.pathParameters?.rowId != null
+        ? String(event.pathParameters.rowId).trim()
+        : ""
+
+    if (!pathBoardId || !pathRowId) {
+      return json(400, { message: "boardId and rowId are required" })
+    }
+
+    let payload = {}
+    try {
+      const raw = event.body ?? "{}"
+      const text = event.isBase64Encoded
+        ? Buffer.from(raw, "base64").toString("utf8")
+        : raw
+      payload = JSON.parse(text)
+    } catch {
+      return json(400, { message: "Invalid JSON body" })
+    }
+
+    const cellsPayload = payload.cells
+    if (
+      !cellsPayload ||
+      typeof cellsPayload !== "object" ||
+      Array.isArray(cellsPayload)
+    ) {
+      return json(400, { message: "cells must be a non-array object" })
+    }
+
+    const getRes = await client.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: marshall({
+          PK: pk,
+          SK: `BOARD#${pathBoardId}`,
+        }),
+      }),
+    )
+    if (!getRes.Item) {
+      return json(404, { message: "Board not found" })
+    }
+    const boardRow = unmarshall(getRes.Item)
+    if (!String(boardRow.SK ?? "").startsWith("BOARD#")) {
+      return json(404, { message: "Board not found" })
+    }
+
+    const columns = sanitizeColumns(boardRow.columns)
+    if (columns.length === 0) {
+      return json(400, { message: "Board has no columns" })
+    }
+
+    const normalized = normalizeCellsForBoard(columns, cellsPayload)
+    if (!normalized.ok) {
+      return json(400, { message: normalized.message })
+    }
+
+    const rawRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
+    const rowIndex = rawRows.findIndex((r) => {
+      if (!r || typeof r !== "object") return false
+      const rid =
+        typeof r.rowId === "string"
+          ? r.rowId
+          : typeof r.id === "string"
+            ? r.id
+            : null
+      return rid === pathRowId
+    })
+
+    if (rowIndex < 0) {
+      return json(404, { message: "Entry not found" })
+    }
+
+    const oldRow = rawRows[rowIndex]
+    const stableKey =
+      typeof oldRow.rowId === "string"
+        ? oldRow.rowId
+        : typeof oldRow.id === "string"
+          ? oldRow.id
+          : pathRowId
+    const now = new Date().toISOString()
+    const createdAt =
+      typeof oldRow.createdAt === "string" ? oldRow.createdAt : now
+
+    const updatedEntry = {
+      rowId: stableKey,
+      cells: normalized.cells,
+      createdAt,
+      updatedAt: now,
+    }
+
+    const newRows = [...rawRows]
+    newRows[rowIndex] = updatedEntry
+
+    try {
+      await client.send(
+        new UpdateItemCommand({
+          TableName: tableName,
+          Key: marshall({
+            PK: pk,
+            SK: `BOARD#${pathBoardId}`,
+          }),
+          UpdateExpression: "SET #rows = :rows, #updatedAt = :u",
+          ExpressionAttributeNames: {
+            "#rows": "rows",
+            "#updatedAt": "updatedAt",
+          },
+          ExpressionAttributeValues: marshall({
+            ":rows": newRows,
+            ":u": now,
+          }),
+          ConditionExpression: "attribute_exists(PK) AND attribute_exists(SK)",
+        }),
+      )
+    } catch (e) {
+      if (e.name === "ConditionalCheckFailedException") {
+        return json(404, { message: "Board not found" })
+      }
+      throw e
+    }
+
+    return json(200, {
+      row: {
+        id: stableKey,
+        cells: normalized.cells,
+        createdAt,
+        updatedAt: now,
+      },
+      updatedAt: now,
     })
   }
 
