@@ -113,9 +113,9 @@ function getStorageData() {
  * @param {string} boardId
  * @param {string} rawText
  * @param {string} url
- * @returns {Promise<void>}
+ * @returns {Promise<Record<string, unknown>>}
  */
-async function saveJobToAppliCache(boardId, rawText, url) {
+async function fetchPreviewSmartCache(boardId, rawText, url) {
   const base = getApiBase();
   if (!base) {
     throw new Error(
@@ -136,7 +136,52 @@ async function saveJobToAppliCache(boardId, rawText, url) {
         Authorization: `Bearer ${idToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ rawText, url }),
+      body: JSON.stringify({ rawText, url, previewOnly: true }),
+    },
+  );
+
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again on the web.");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      body && typeof body.message === "string"
+        ? body.message
+        : `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+/**
+ * @param {string} boardId
+ * @param {Record<string, string>} cells
+ * @param {string} url
+ * @returns {Promise<void>}
+ */
+async function saveBoardRow(boardId, cells, url) {
+  const base = getApiBase();
+  if (!base) {
+    throw new Error(
+      "API URL not configured. Set APPLICACHE_API_BASE_URL in config.js.",
+    );
+  }
+  const data = await getStorageData();
+  const idToken = data.applicache_idToken;
+  if (!idToken || typeof idToken !== "string") {
+    throw new Error("Not signed in. Connect your account from the dashboard.");
+  }
+
+  const res = await fetch(
+    `${base}/boards/${encodeURIComponent(boardId)}/entries`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ cells, url }),
     },
   );
 
@@ -146,6 +191,134 @@ async function saveJobToAppliCache(boardId, rawText, url) {
   if (!res.ok) {
     throw new Error(await parseErrorBody(res));
   }
+}
+
+/**
+ * @param {"error"|"success"|"neutral"|"warning"} kind
+ * @param {string} text
+ */
+function setPreviewStatus(kind, text) {
+  const el = document.getElementById("preview-cache-status");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove(
+    "cache-status--error",
+    "cache-status--success",
+    "cache-status--warning",
+    "hidden",
+  );
+  if (!text) {
+    el.classList.add("hidden");
+    return;
+  }
+  if (kind === "error") el.classList.add("cache-status--error");
+  else if (kind === "success") el.classList.add("cache-status--success");
+  else if (kind === "warning") el.classList.add("cache-status--warning");
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isLongTextColumn(name) {
+  const n = String(name).toLowerCase();
+  return n.includes("note") || n.includes("description");
+}
+
+/**
+ * @param {Record<string, string>} cells
+ * @param {{ id: string, name: string }[]} columns
+ * @param {{ isDuplicate?: boolean, message?: string }} meta
+ */
+function renderEditablePreview(cells, columns, meta) {
+  const body = document.getElementById("preview-body");
+  if (!body) return;
+  body.innerHTML = "";
+
+  if (meta && meta.isDuplicate) {
+    const banner = document.createElement("p");
+    banner.className = "preview-banner";
+    banner.textContent =
+      meta.message && String(meta.message).trim()
+        ? String(meta.message)
+        : "This job may already be on your board.";
+    body.appendChild(banner);
+  }
+
+  const fields = document.createElement("div");
+  fields.className = "preview-fields";
+
+  for (const col of columns) {
+    if (!col || typeof col.id !== "string") continue;
+    const id = col.id;
+    const name =
+      typeof col.name === "string" && col.name.trim()
+        ? col.name
+        : "Column";
+    const val = cells[id] != null ? String(cells[id]) : "";
+
+    const wrap = document.createElement("div");
+    wrap.className = "preview-field";
+
+    const label = document.createElement("label");
+    label.className = "preview-field__label";
+    label.htmlFor = `preview-col-${id}`;
+    label.textContent = name;
+
+    const long = isLongTextColumn(name);
+    const control = long
+      ? document.createElement("textarea")
+      : document.createElement("input");
+    control.className = "preview-field__control";
+    control.id = `preview-col-${id}`;
+    control.dataset.columnId = id;
+    if (!long) control.type = "text";
+    control.value = val;
+
+    wrap.appendChild(label);
+    wrap.appendChild(control);
+    fields.appendChild(wrap);
+  }
+
+  body.appendChild(fields);
+
+  const actions = document.createElement("div");
+  actions.className = "preview-actions";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.id = "btn-preview-save";
+  saveBtn.className = "btn btn-primary";
+  saveBtn.setAttribute("aria-busy", "false");
+  saveBtn.innerHTML =
+    '<span class="btn__spinner" aria-hidden="true"></span><span class="btn__label">Save to Board</span>';
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.id = "btn-preview-cancel";
+  cancelBtn.className = "btn btn-secondary";
+  cancelBtn.textContent = "Cancel";
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(cancelBtn);
+  body.appendChild(actions);
+}
+
+/**
+ * @returns {Record<string, string>}
+ */
+function collectCellsFromPreview() {
+  /** @type {Record<string, string>} */
+  const cells = {};
+  const controls = document.querySelectorAll(
+    "#preview-body .preview-field__control",
+  );
+  controls.forEach((el) => {
+    const id = el.dataset.columnId;
+    if (!id) return;
+    cells[id] = el.value != null ? String(el.value) : "";
+  });
+  return cells;
 }
 
 /**
@@ -320,6 +493,100 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnCache = document.getElementById("btn-cache");
   /** @type {boolean} */
   let cacheRequestInFlight = false;
+  /** @type {boolean} */
+  let previewSaveInFlight = false;
+  /** @type {{ boardId: string, pageUrl: string } | null} */
+  let previewContext = null;
+
+  const authSection = document.getElementById("auth-section");
+  const previewArea = document.getElementById("preview-area");
+
+  /**
+   * @param {boolean} loading
+   */
+  const setPreviewSaveLoading = (loading) => {
+    previewSaveInFlight = loading;
+    const saveBtn = document.getElementById("btn-preview-save");
+    if (saveBtn) {
+      if (loading) {
+        saveBtn.classList.add("preview-btn--loading");
+        saveBtn.disabled = true;
+        saveBtn.setAttribute("aria-busy", "true");
+      } else {
+        saveBtn.classList.remove("preview-btn--loading");
+        saveBtn.disabled = false;
+        saveBtn.setAttribute("aria-busy", "false");
+      }
+    }
+    document
+      .querySelectorAll("#preview-body .preview-field__control")
+      .forEach((el) => {
+        el.disabled = loading;
+      });
+    const cancelBtn = document.getElementById("btn-preview-cancel");
+    if (cancelBtn) cancelBtn.disabled = loading;
+  };
+
+  const hidePreviewView = () => {
+    previewContext = null;
+    const body = document.getElementById("preview-body");
+    if (body) body.innerHTML = "";
+    setPreviewStatus("neutral", "");
+    if (previewArea) {
+      previewArea.classList.add("hidden");
+      previewArea.setAttribute("aria-hidden", "true");
+    }
+    if (authSection) authSection.classList.remove("hidden");
+  };
+
+  const showPreviewView = () => {
+    if (authSection) authSection.classList.add("hidden");
+    if (previewArea) {
+      previewArea.classList.remove("hidden");
+      previewArea.setAttribute("aria-hidden", "false");
+    }
+    setPreviewStatus("neutral", "");
+  };
+
+  const wirePreviewActions = () => {
+    const saveEl = document.getElementById("btn-preview-save");
+    const cancelEl = document.getElementById("btn-preview-cancel");
+    if (saveEl) {
+      saveEl.addEventListener("click", () => {
+        if (!previewContext || previewSaveInFlight) return;
+        void (async () => {
+          setPreviewSaveLoading(true);
+          setPreviewStatus("neutral", "");
+          try {
+            const cells = collectCellsFromPreview();
+            await saveBoardRow(
+              previewContext.boardId,
+              cells,
+              previewContext.pageUrl,
+            );
+            setCacheStatus("success", "Saved to your board!");
+            hidePreviewView();
+          } catch (e) {
+            const msg =
+              e instanceof Error
+                ? e.message
+                : "Could not save to your board.";
+            setPreviewStatus("error", msg);
+          } finally {
+            setPreviewSaveLoading(false);
+          }
+        })();
+      });
+    }
+    if (cancelEl) {
+      cancelEl.addEventListener("click", () => {
+        if (previewSaveInFlight) return;
+        setCacheStatus("neutral", "");
+        hidePreviewView();
+      });
+    }
+  };
+
   if (btnCache) {
     btnCache.addEventListener("click", () => {
       const boardSelect = document.getElementById("board-select");
@@ -344,7 +611,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btnCache.classList.add("btn--loading");
       btnCache.disabled = true;
       btnCache.setAttribute("aria-busy", "true");
-      setCacheStatus("neutral", "");
+      setCacheStatus("neutral", "AI is analyzing the page...");
 
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs[0];
@@ -409,16 +676,47 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                   }
 
-                  setCacheStatus("neutral", "Saving…");
-                  await saveJobToAppliCache(
+                  const data = await fetchPreviewSmartCache(
                     boardId,
                     response.rawText,
                     response.url,
                   );
-                  setCacheStatus("success", "Saved to your board.");
+
+                  const cells =
+                    data.cells &&
+                    typeof data.cells === "object" &&
+                    !Array.isArray(data.cells)
+                      ? /** @type {Record<string, string>} */ (data.cells)
+                      : {};
+                  const columns = Array.isArray(data.columns) ? data.columns : [];
+                  if (columns.length === 0) {
+                    setCacheStatus(
+                      "error",
+                      "Could not load board columns. Try again or reopen the extension.",
+                    );
+                    return;
+                  }
+
+                  previewContext = {
+                    boardId,
+                    pageUrl: response.url,
+                  };
+
+                  const isDuplicate = Boolean(data.isDuplicate);
+                  const message =
+                    typeof data.message === "string" ? data.message : "";
+
+                  renderEditablePreview(cells, columns, {
+                    isDuplicate,
+                    message,
+                  });
+                  showPreviewView();
+                  wirePreviewActions();
                 } catch (e) {
                   const msg =
-                    e instanceof Error ? e.message : "Could not save to your board.";
+                    e instanceof Error
+                      ? e.message
+                      : "Could not analyze this page.";
                   setCacheStatus("error", msg);
                 } finally {
                   finishLoading();

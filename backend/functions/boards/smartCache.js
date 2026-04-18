@@ -2,101 +2,78 @@ const { GetItemCommand, UpdateItemCommand } = require("@aws-sdk/client-dynamodb"
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
 const { randomUUID } = require("crypto")
 const OpenAI = require("openai")
+const { jobUrlAlreadyCached, secondaryUrlForDedup } = require("./boardDedup")
 
 const RAW_TEXT_MAX_CHARS = 12000
 
 /**
- * Stable URL comparison for duplicate detection (ignore query/trailing slash case).
- * @param {string} u
+ * @param {unknown} v
  * @returns {string}
  */
-function normalizeUrlForDedup(u) {
-  const s = String(u).trim()
-  if (!s) return ""
-  try {
-    const x = new URL(s)
-    return `${x.origin}${x.pathname}`.replace(/\/$/, "").toLowerCase()
-  } catch {
-    return s.toLowerCase().replace(/\/$/, "")
-  }
+function aiValueToPlainString(v) {
+  if (v == null) return ""
+  const t = typeof v
+  if (t === "string") return v
+  if (t === "number" || t === "boolean") return String(v)
+  return ""
 }
 
 /**
- * @param {unknown[]} rows
- * @param {string} pageUrl
- * @param {string} extractedJobUrl
- * @returns {boolean}
- */
-function jobUrlAlreadyCached(rows, pageUrl, extractedJobUrl) {
-  const targets = [
-    normalizeUrlForDedup(pageUrl),
-    normalizeUrlForDedup(extractedJobUrl),
-  ].filter(Boolean)
-  if (targets.length === 0) return false
-
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue
-    const cells =
-      row.cells && typeof row.cells === "object" && !Array.isArray(row.cells)
-        ? row.cells
-        : {}
-    for (const v of Object.values(cells)) {
-      const nv = normalizeUrlForDedup(v)
-      if (!nv) continue
-      for (const t of targets) {
-        if (t && nv === t) return true
-      }
-    }
-  }
-  return false
-}
-
-/**
- * Map OpenAI extraction + defaults into per-column cell values.
- * @param {{ id: string, name: string }[]} columns
- * @param {{ companyName: string, jobTitle: string, jobUrl: string, pageUrl: string }} extracted
+ * @param {Record<string, unknown>} parsed
  * @returns {Record<string, string>}
  */
-function mapExtractedToCells(columns, extracted) {
-  const { companyName, jobTitle, jobUrl, pageUrl } = extracted
-  const urlValue = (jobUrl || pageUrl).trim()
+function buildLowerKeyLookup(parsed) {
+  /** @type {Record<string, string>} */
+  const lookup = Object.create(null)
+  for (const [k, v] of Object.entries(parsed)) {
+    if (typeof k !== "string") continue
+    const lk = k.trim().toLowerCase()
+    if (!lk) continue
+    lookup[lk] = aiValueToPlainString(v)
+  }
+  return lookup
+}
 
-  let companyDone = false
-  let titleDone = false
-  let urlDone = false
+/**
+ * @param {string[]} columnNames
+ * @returns {string}
+ */
+function buildSystemPrompt(columnNames) {
+  const namesJoined = columnNames.join(", ")
+  return [
+    "You are a job application parser. Extract information from the provided text for these specific fields:",
+    namesJoined + ".",
+    "Return ONLY a JSON object where the keys are the exact field names provided.",
+    'If a field is not found in the text, return an empty string for that key.',
+    "For fields whose names refer to application status, if you cannot find a status, return \"Applied\".",
+    "Match the language of each extracted value to the original source text — do not translate or localize company names, titles, or other text.",
+    "All values must be concise plain strings (no markdown, no nested JSON).",
+    "Keep extracted values concise.",
+  ].join(" ")
+}
 
+/**
+ * @param {{ id: string, name: string }[]} columns
+ * @param {Record<string, string>} lookup
+ * @param {string} pageUrl
+ * @returns {Record<string, string>}
+ */
+function mapAiLookupToCells(columns, lookup, pageUrl) {
   /** @type {Record<string, string>} */
   const cells = {}
-
   for (const col of columns) {
-    const n = col.name.toLowerCase()
-    if (n.includes("status")) {
-      cells[col.id] = "Applied"
-    } else if (
-      !companyDone &&
-      (n.includes("company") || n.includes("employer"))
-    ) {
-      cells[col.id] = companyName
-      companyDone = true
-    } else if (
-      !titleDone &&
-      (n.includes("title") ||
-        n.includes("role") ||
-        (n.includes("position") && !n.includes("status")))
-    ) {
-      cells[col.id] = jobTitle
-      titleDone = true
-    } else if (
-      !urlDone &&
-      (n.includes("url") || n.includes("link") || n.includes("apply"))
-    ) {
-      cells[col.id] = urlValue
-      urlDone = true
-    } else {
-      cells[col.id] = ""
-    }
-  }
+    const nameKey = String(col.name ?? "").trim().toLowerCase()
+    let val = nameKey ? lookup[nameKey] ?? "" : ""
 
+    const cn = String(col.name ?? "").toLowerCase()
+    if ((cn.includes("url") || cn.includes("link")) && !val.trim()) {
+      val = pageUrl
+    }
+    if (cn.includes("status") && !val.trim()) {
+      val = "Applied"
+    }
+    cells[col.id] = val
+  }
   return cells
 }
 
@@ -126,6 +103,8 @@ async function handleSmartCache(ctx) {
     normalizeCellsForBoard,
     cellsHaveAtLeastOneNonWhitespaceValue,
   } = ctx
+
+  const previewOnly = payload.previewOnly === true
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey || !String(apiKey).trim()) {
@@ -161,13 +140,12 @@ async function handleSmartCache(ctx) {
     return json(400, { message: "Board has no columns" })
   }
 
+  const columnNames = columns.map((c) => c.name).filter(Boolean)
   const openai = new OpenAI({ apiKey: String(apiKey).trim() })
   const textSlice = rawText.slice(0, RAW_TEXT_MAX_CHARS)
 
-  let companyName = ""
-  let jobTitle = ""
-  let jobUrl = ""
-
+  /** @type {Record<string, unknown>} */
+  let parsed
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -175,8 +153,7 @@ async function handleSmartCache(ctx) {
       messages: [
         {
           role: "system",
-          content:
-            'Job parser. Output JSON only: keys companyName, jobTitle, jobUrl. Use "" if unknown.',
+          content: buildSystemPrompt(columnNames),
         },
         { role: "user", content: textSlice },
       ],
@@ -185,11 +162,11 @@ async function handleSmartCache(ctx) {
     if (!content) {
       return json(502, { message: "Could not extract job data" })
     }
-    const parsed = JSON.parse(content)
-    companyName =
-      typeof parsed.companyName === "string" ? parsed.companyName : ""
-    jobTitle = typeof parsed.jobTitle === "string" ? parsed.jobTitle : ""
-    jobUrl = typeof parsed.jobUrl === "string" ? parsed.jobUrl : ""
+    const top = JSON.parse(content)
+    if (!top || typeof top !== "object" || Array.isArray(top)) {
+      return json(502, { message: "Could not extract job data" })
+    }
+    parsed = top
   } catch (e) {
     const msg = e instanceof Error ? e.message : "openai_error"
     console.log(
@@ -198,17 +175,8 @@ async function handleSmartCache(ctx) {
     return json(502, { message: "Could not extract job data" })
   }
 
-  const existingRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
-  if (jobUrlAlreadyCached(existingRows, pageUrl, jobUrl)) {
-    return json(409, { message: "Job already cached" })
-  }
-
-  const cellsRaw = mapExtractedToCells(columns, {
-    companyName,
-    jobTitle,
-    jobUrl,
-    pageUrl,
-  })
+  const lookup = buildLowerKeyLookup(parsed)
+  const cellsRaw = mapAiLookupToCells(columns, lookup, pageUrl)
 
   const normalized = normalizeCellsForBoard(columns, cellsRaw)
   if (!normalized.ok) {
@@ -221,6 +189,31 @@ async function handleSmartCache(ctx) {
   ) {
     return json(400, {
       message: "Could not extract enough data for this board.",
+    })
+  }
+
+  const existingRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
+  const isDuplicate = jobUrlAlreadyCached(
+    existingRows,
+    pageUrl,
+    secondaryUrlForDedup(columns, normalized.cells),
+  )
+
+  if (previewOnly) {
+    return json(200, {
+      cells: normalized.cells,
+      columns,
+      isDuplicate,
+      message: isDuplicate ? "Job already cached" : "",
+    })
+  }
+
+  if (isDuplicate) {
+    return json(409, {
+      message: "Job already cached",
+      cells: normalized.cells,
+      columns,
+      isDuplicate: true,
     })
   }
 

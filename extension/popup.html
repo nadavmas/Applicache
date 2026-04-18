@@ -52,6 +52,22 @@
           Log in
         </button>
       </section>
+
+      <div
+        id="preview-area"
+        class="preview-container hidden"
+        aria-hidden="true"
+        role="region"
+        aria-label="Review extracted fields before saving"
+      >
+        <p
+          id="preview-cache-status"
+          class="cache-status preview-cache-status hidden"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="preview-body"></div>
+      </div>
     </div>
     <script src="config.js"></script>
     <script src="env.local.js"></script>

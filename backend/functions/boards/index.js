@@ -9,6 +9,7 @@ const {
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
 const { randomUUID } = require("crypto")
 const { handleSmartCache } = require("./smartCache")
+const { jobUrlAlreadyCached, secondaryUrlForDedup } = require("./boardDedup")
 
 const client = new DynamoDBClient({})
 
@@ -310,6 +311,25 @@ exports.handler = async (event) => {
       if (!cellsHaveAtLeastOneNonWhitespaceValue(normalized.cells)) {
         return json(400, {
           message: "At least one field must be filled in.",
+        })
+      }
+
+      const pageUrl =
+        typeof payload.url === "string" ? payload.url.trim() : ""
+      const existingRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
+      if (
+        pageUrl &&
+        jobUrlAlreadyCached(
+          existingRows,
+          pageUrl,
+          secondaryUrlForDedup(columns, normalized.cells),
+        )
+      ) {
+        return json(409, {
+          message: "Job already cached",
+          cells: normalized.cells,
+          columns,
+          isDuplicate: true,
         })
       }
 
