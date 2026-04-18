@@ -1,2 +1,5 @@
 README.md
 node_modules/
+
+# Extension API URL and other local overrides (copy from env.local.example.js)
+extension/env.local.js

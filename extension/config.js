@@ -10,4 +10,9 @@
     // "https://your-production-host.example",
   ];
   g.APPLICACHE_APP_ORIGIN = g.APPLICACHE_ALLOWED_ORIGINS[0];
+  /**
+   * REST API base URL — set in gitignored `env.local.js` (see `env.local.example.js`).
+   * Must match VITE_API_URL in the frontend `.env.local`.
+   */
+  g.APPLICACHE_API_BASE_URL = "";
 })();

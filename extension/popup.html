@@ -4,170 +4,57 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AppliCache</title>
-    <style>
-      :root {
-        font-family:
-          Inter,
-          system-ui,
-          -apple-system,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        color: var(--text);
-        line-height: 1.5;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-
-        --text: #0f172a;
-        --text-secondary: #334155;
-        --accent: #0071e3;
-        --accent-hover: #0077ed;
-        --accent-ring: rgba(0, 113, 227, 0.28);
-        --surface: #ffffff;
-        --surface-muted: #fafafa;
-        --border: #e8ecf1;
-        --muted: #64748b;
-        --page-bg: #f5f6f8;
-
-        --space-3: 0.75rem;
-        --space-4: 1rem;
-        --space-5: 1.25rem;
-        --space-6: 1.5rem;
-
-        --radius-md: 12px;
-
-        --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-
-        --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        --duration-fast: 180ms;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        min-width: 280px;
-        max-width: 320px;
-        padding: var(--space-6);
-        background: var(--page-bg);
-      }
-
-      .popup {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-sm);
-        padding: var(--space-5);
-      }
-
-      .popup__title {
-        margin: 0 0 var(--space-3);
-        font-size: 1.125rem;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        color: var(--text);
-      }
-
-      .popup__status {
-        margin: 0 0 var(--space-5);
-        font-size: 0.875rem;
-        color: var(--muted);
-      }
-
-      .popup__panel--hidden {
-        display: none !important;
-      }
-
-      .popup__btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: var(--space-3) var(--space-4);
-        font: inherit;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #fff;
-        background: var(--accent);
-        border: none;
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        box-shadow: var(--shadow-sm);
-        transition:
-          background var(--duration-fast) var(--ease-out),
-          box-shadow var(--duration-fast) var(--ease-out);
-      }
-
-      .popup__btn:hover {
-        background: var(--accent-hover);
-      }
-
-      .popup__btn:focus-visible {
-        outline: none;
-        box-shadow:
-          var(--shadow-sm),
-          0 0 0 3px var(--accent-ring);
-      }
-
-      .popup__btn--secondary {
-        color: var(--accent);
-        background: var(--surface);
-        border: 1px solid var(--border);
-        box-shadow: none;
-      }
-
-      .popup__btn--secondary:hover {
-        background: var(--surface-muted);
-        color: var(--accent-hover);
-      }
-
-      .popup__btn--secondary:focus-visible {
-        box-shadow: 0 0 0 3px var(--accent-ring);
-      }
-
-      .popup__profile-label {
-        margin: 0 0 var(--space-3);
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--muted);
-      }
-
-      .popup__email {
-        margin: 0 0 var(--space-5);
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        word-break: break-all;
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="popup">
-      <h1 class="popup__title">AppliCache</h1>
+    <div class="popup-container">
+      <header class="popup-header">
+        <div class="popup-logo" aria-hidden="true">AC</div>
+        <h1 class="popup-title">AppliCache</h1>
+      </header>
 
-      <div id="view-guest">
-        <p class="popup__status" id="guest-status">
-          Connect your AppliCache account — if you&apos;re already signed in on the web,
-          we&apos;ll link automatically.
-        </p>
-        <button type="button" class="popup__btn" id="btn-login">
-          Connect to AppliCache
+      <section id="auth-section" class="popup-card hidden" aria-live="polite">
+        <p class="field-label">Signed in as</p>
+        <p class="user-email" id="user-email"></p>
+
+        <label class="field-label" for="board-select">Board</label>
+        <select id="board-select" class="board-select" aria-describedby="cache-status">
+          <option value="">Select a board…</option>
+        </select>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          id="btn-cache"
+          aria-busy="false"
+        >
+          <span class="btn__spinner" aria-hidden="true"></span>
+          <span class="btn__label">Cache this application</span>
         </button>
-      </div>
 
-      <section id="user-profile" class="popup__panel--hidden" aria-live="polite">
-        <p class="popup__profile-label">Signed in</p>
-        <p class="popup__email" id="user-email"></p>
-        <button type="button" class="popup__btn popup__btn--secondary" id="btn-logout">
-          Logout
+        <p
+          class="cache-status"
+          id="cache-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <button type="button" class="btn btn-secondary" id="btn-logout">
+          Log out
+        </button>
+      </section>
+
+      <section id="login-section" class="popup-card">
+        <p class="login-message" id="login-message">
+          Please log in to start caching jobs.
+        </p>
+        <button type="button" class="btn btn-primary" id="btn-login">
+          Log in
         </button>
       </section>
     </div>
     <script src="config.js"></script>
+    <script src="env.local.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
