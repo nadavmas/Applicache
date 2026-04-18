@@ -33,6 +33,7 @@ export default function DashboardSidebar({
   onCommitCreate,
   onCancelCreate,
   boardsLoading = false,
+  boardInteractionsLocked = false,
   createBoardError = "",
   onSignOut,
   signingOut = false,
@@ -108,6 +109,10 @@ export default function DashboardSidebar({
                     }
                     aria-current={board.id === activeBoardId ? "true" : undefined}
                     onClick={() => onSelectBoard?.(board.id)}
+                    disabled={boardInteractionsLocked}
+                    aria-busy={
+                      boardInteractionsLocked ? "true" : undefined
+                    }
                   >
                     <span className="dashboard-sidebar__item-label">
                       {board.name}
@@ -145,12 +150,14 @@ export default function DashboardSidebar({
                   placeholder="Table name"
                   aria-label="New table name"
                   autoFocus
+                  disabled={boardInteractionsLocked}
                 />
                 <div className="dashboard-sidebar__create-actions">
                   <button
                     type="button"
                     className="dashboard-sidebar__create-submit"
                     onClick={handleCommitClick}
+                    disabled={boardInteractionsLocked}
                   >
                     Continue
                   </button>
@@ -158,6 +165,7 @@ export default function DashboardSidebar({
                     type="button"
                     className="dashboard-sidebar__create-cancel"
                     onClick={handleCancelClick}
+                    disabled={boardInteractionsLocked}
                   >
                     Cancel
                   </button>
@@ -168,7 +176,7 @@ export default function DashboardSidebar({
                 type="button"
                 className="dashboard-sidebar__create"
                 onClick={() => onStartCreate?.()}
-                disabled={boardsLoading}
+                disabled={boardsLoading || boardInteractionsLocked}
               >
                 <PlusIcon />
                 Create new table

@@ -5,6 +5,7 @@ import { signOut } from "../auth/cognitoStub";
 import {
   addBoardEntry,
   createBoard,
+  deleteBoard,
   deleteBoardEntry,
   getBoard,
   isBoardsApiConfigured,
@@ -56,6 +57,9 @@ export default function DashboardPage() {
   const [boardEditDraft, setBoardEditDraft] = useState(null);
   const [savingBoardEdit, setSavingBoardEdit] = useState(false);
   const [saveBoardEditError, setSaveBoardEditError] = useState("");
+
+  const [deletingBoardId, setDeletingBoardId] = useState(null);
+  const [deleteBoardError, setDeleteBoardError] = useState("");
 
   const handleFocusAfterDeleteComplete = useCallback(() => {
     setFocusAfterDelete(null);
@@ -130,9 +134,13 @@ export default function DashboardPage() {
     setIsEditingBoard(false);
     setBoardEditDraft(null);
     setSaveBoardEditError("");
+    setDeleteBoardError("");
   }, [activeBoardId]);
 
+  const boardInteractionsLocked = deletingBoardId != null;
+
   const handleSelectBoard = (boardId) => {
+    if (boardInteractionsLocked) return;
     setActiveBoardId(boardId);
     if (!isBoardsApiConfigured()) return;
     if (boardId.startsWith("draft-")) return;
@@ -167,6 +175,7 @@ export default function DashboardPage() {
   };
 
   const handleStartCreateTable = () => {
+    if (boardInteractionsLocked) return;
     setCreateBoardError("");
     setIsCreatingTable(true);
     setCreateTableName("");
@@ -179,6 +188,7 @@ export default function DashboardPage() {
   };
 
   const handleCommitCreateTable = () => {
+    if (boardInteractionsLocked) return;
     const name = createTableName.trim();
     if (!name) {
       setIsCreatingTable(false);
@@ -214,6 +224,7 @@ export default function DashboardPage() {
   };
 
   const handleSaveDraftBoard = (boardId) => {
+    if (boardInteractionsLocked) return;
     if (!isBoardsApiConfigured() || savingBoardId) return;
     const board = boards.find((b) => b.id === boardId);
     if (!board || board.persisted) return;
@@ -264,6 +275,7 @@ export default function DashboardPage() {
       : activeBoard;
 
   const handleStartEditBoard = () => {
+    if (boardInteractionsLocked) return;
     const board = boards.find((b) => b.id === activeBoardId);
     if (!board?.persisted) return;
 
@@ -297,16 +309,19 @@ export default function DashboardPage() {
   };
 
   const handleCancelBoardEdit = () => {
+    if (boardInteractionsLocked) return;
     setIsEditingBoard(false);
     setBoardEditDraft(null);
     setSaveBoardEditError("");
   };
 
   const handleBoardTitleDraftChange = (value) => {
+    if (boardInteractionsLocked) return;
     setBoardEditDraft((prev) => (prev ? { ...prev, name: value } : prev));
   };
 
   const handleBoardColumnDraftChange = (columnId, value) => {
+    if (boardInteractionsLocked) return;
     setBoardEditDraft((prev) => {
       if (!prev) return prev;
       return {
@@ -319,6 +334,7 @@ export default function DashboardPage() {
   };
 
   const handleRemoveBoardColumnDraft = (columnId) => {
+    if (boardInteractionsLocked) return;
     setBoardEditDraft((prev) => {
       if (!prev || prev.columns.length <= 1) return prev;
       return {
@@ -329,6 +345,7 @@ export default function DashboardPage() {
   };
 
   const handleUpdateBoard = () => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || !isBoardsApiConfigured()) return;
     if (!boardEditDraft || !canSaveBoardEdit) return;
     const board = boards.find((b) => b.id === activeBoardId);
@@ -364,6 +381,7 @@ export default function DashboardPage() {
   };
 
   const handleAddColumn = (columnName) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId) return;
     if (isEditingBoard && boardEditDraft) {
       const trimmed = columnName.trim();
@@ -385,6 +403,7 @@ export default function DashboardPage() {
   };
 
   const handleEnableBoardEntries = (boardId) => {
+    if (boardInteractionsLocked) return;
     if (isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === boardId);
@@ -396,6 +415,7 @@ export default function DashboardPage() {
   };
 
   const handleAddRow = () => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
@@ -407,6 +427,7 @@ export default function DashboardPage() {
   };
 
   const handleCellChange = (rowId, columnId, value) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || isEditingBoard) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
@@ -425,6 +446,7 @@ export default function DashboardPage() {
   };
 
   const handleStartEditRow = (rowId) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || isEditingBoard) return;
     if (savingEntryRowId) return;
     if (deletingRowId) return;
@@ -458,6 +480,7 @@ export default function DashboardPage() {
   };
 
   const handleCancelEdit = () => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || !editingRowId) {
       setEditingRowId(null);
       setOriginalEditRowData(null);
@@ -486,6 +509,7 @@ export default function DashboardPage() {
   };
 
   const handleUpdateRow = (rowId) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
@@ -542,6 +566,7 @@ export default function DashboardPage() {
   };
 
   const handleSaveRow = (rowId) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
@@ -595,6 +620,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteRow = (rowId) => {
+    if (boardInteractionsLocked) return;
     if (!activeBoardId || !isBoardsApiConfigured() || isEditingBoard) return;
     if (savingEntryRowId || deletingRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
@@ -635,6 +661,34 @@ export default function DashboardPage() {
       })
       .finally(() => {
         setDeletingRowId(null);
+      });
+  };
+
+  const handleDeleteBoard = () => {
+    if (boardInteractionsLocked) return;
+    if (!isBoardsApiConfigured()) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this board and all its jobs? This action cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setDeleteBoardError("");
+    setDeletingBoardId(board.id);
+    deleteBoard(board.id)
+      .then(() => {
+        setBoards((prev) => prev.filter((b) => b.id !== board.id));
+      })
+      .catch((err) => {
+        setDeleteBoardError(
+          err instanceof Error ? err.message : "Could not delete board.",
+        );
+      })
+      .finally(() => {
+        setDeletingBoardId(null);
       });
   };
 
@@ -679,6 +733,7 @@ export default function DashboardPage() {
         onCommitCreate={handleCommitCreateTable}
         onCancelCreate={handleCancelCreateTable}
         boardsLoading={boardsLoading}
+        boardInteractionsLocked={boardInteractionsLocked}
         createBoardError={createBoardError}
         onSignOut={handleSignOut}
         signingOut={signingOut}
@@ -738,6 +793,9 @@ export default function DashboardPage() {
                 onDeleteRow={handleDeleteRow}
                 focusAfterDelete={focusAfterDelete}
                 onFocusAfterDeleteComplete={handleFocusAfterDeleteComplete}
+                deletingBoardId={deletingBoardId}
+                onDeleteBoard={handleDeleteBoard}
+                deleteBoardError={deleteBoardError}
               />
               {showDraftSaveBar ? (
                 <div
@@ -772,7 +830,9 @@ export default function DashboardPage() {
             <p className="dashboard-main__meta dashboard-main__meta--solo">
               {boardsLoading
                 ? "Loading your tables…"
-                : "Create a table from the sidebar to get started."}
+                : boards.length === 0
+                  ? "You have no boards yet. Create one from the sidebar to get started."
+                  : "Create a table from the sidebar to get started."}
             </p>
           )}
         </div>

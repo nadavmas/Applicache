@@ -1110,9 +1110,51 @@ button.auth-link {
 
 /* Board table — width follows column content, not full main column */
 .board-table-wrap {
+  position: relative;
   margin-top: var(--space-6);
   width: fit-content;
   max-width: 100%;
+}
+
+.board-table-wrap--locked {
+  pointer-events: none;
+}
+
+.board-table__deleting-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  animation: board-table-overlay-in var(--duration-fast) var(--ease-out);
+}
+
+.board-table__deleting-overlay-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+@keyframes board-table-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-table__deleting-overlay {
+    animation: none;
+  }
 }
 
 .board-table__board-header {
@@ -1249,6 +1291,15 @@ button.auth-link {
 .board-actions__menu-item:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.board-actions__menu-item--danger {
+  color: #b91c1c;
+}
+
+.board-actions__menu-item--danger:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.06);
+  color: #991b1b;
 }
 
 .board-table__header-edit-cell {

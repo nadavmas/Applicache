@@ -204,6 +204,50 @@ export const updateBoard = async (boardId, boardData) => {
 }
 
 /**
+ * Delete a persisted board and all its entries (single DynamoDB item).
+ * @param {string} boardId
+ * @returns {Promise<void>}
+ */
+export const deleteBoard = async (boardId) => {
+  const base = getBaseUrl()
+  if (!base) {
+    throw new Error("VITE_API_URL is not set")
+  }
+  const idToken = await getIdToken()
+  if (!idToken) {
+    throw new Error("Not signed in")
+  }
+  const pathId = encodeURIComponent(boardId)
+  const res = await fetch(`${base}/boards/${pathId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again.")
+  }
+  if (res.status === 404) {
+    throw new Error("Board not found.")
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorBody(res))
+  }
+  if (res.status === 204) {
+    return
+  }
+  const text = await res.text()
+  if (!text?.trim()) {
+    return
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    return
+  }
+}
+
+/**
  * Append a row entry to a persisted board (DynamoDB list_append).
  * @param {string} boardId
  * @param {{ cells: Record<string, string> }} entryData

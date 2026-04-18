@@ -149,6 +149,7 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:PutItem
                 - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
               Resource: !GetAtt AppliCacheData.Arn
       Events:
         ListBoards:
@@ -175,6 +176,12 @@ Resources:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards/{boardId}
             Method: PATCH
+        DeleteBoard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}
+            Method: DELETE
         AddBoardEntry:
           Type: Api
           Properties:

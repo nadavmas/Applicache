@@ -105,6 +105,9 @@ const BoardColumnRemoveIcon = () => (
  * @param {(rowId: string) => void} [props.onDeleteRow]
  * @param {{ deletedIndex: number } | null} [props.focusAfterDelete]
  * @param {() => void} [props.onFocusAfterDeleteComplete]
+ * @param {string | null} [props.deletingBoardId]
+ * @param {() => void} [props.onDeleteBoard]
+ * @param {string} [props.deleteBoardError]
  */
 export default function BoardTableView({
   board,
@@ -136,6 +139,9 @@ export default function BoardTableView({
   onDeleteRow,
   focusAfterDelete,
   onFocusAfterDeleteComplete,
+  deletingBoardId = null,
+  onDeleteBoard,
+  deleteBoardError = "",
 }) {
   const [isAddingColumn, setIsAddingColumn] = useState(false)
   const [newColumnName, setNewColumnName] = useState("")
@@ -157,7 +163,9 @@ export default function BoardTableView({
   const showRowActionsColumn =
     Boolean(persisted) && entriesEnabled && board.rows.length > 0
   const showBoardMenu = Boolean(persisted && !isEditingBoard)
-  const rowActionsLocked = Boolean(isEditingBoard)
+  const boardLocked =
+    deletingBoardId != null && deletingBoardId === board.id
+  const rowActionsLocked = Boolean(isEditingBoard || boardLocked)
 
   useEffect(() => {
     if (!focusAfterDelete) return
@@ -214,6 +222,7 @@ export default function BoardTableView({
   }, [boardMenuOpen])
 
   const finishColumnInput = (value) => {
+    if (boardLocked) return
     const trimmed = value.trim()
     if (trimmed) onAddColumn(trimmed)
     setNewColumnName("")
@@ -282,12 +291,20 @@ export default function BoardTableView({
   }
 
   const handleBoardMenuToggle = () => {
+    if (boardLocked) return
     setBoardMenuOpen((o) => !o)
   }
 
   const handleBoardMenuEdit = () => {
+    if (boardLocked) return
     setBoardMenuOpen(false)
     onStartEditBoard?.()
+  }
+
+  const handleBoardMenuDelete = () => {
+    if (boardLocked || !onDeleteBoard) return
+    setBoardMenuOpen(false)
+    onDeleteBoard()
   }
 
   const handleBoardTitleKeyDown = (e) => {
@@ -298,7 +315,15 @@ export default function BoardTableView({
   }
 
   return (
-    <div className="board-table-wrap board-table-wrap--appear">
+    <div
+      className={[
+        "board-table-wrap",
+        "board-table-wrap--appear",
+        boardLocked ? "board-table-wrap--locked" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="board-table__board-header">
         {isEditingBoard ? (
           <input
@@ -308,6 +333,7 @@ export default function BoardTableView({
             onChange={(e) => onBoardTitleChange?.(e.target.value)}
             onKeyDown={handleBoardTitleKeyDown}
             aria-label="Board name"
+            disabled={boardLocked}
           />
         ) : (
           <h2 className="dashboard-main__board-title board-table__board-title">
@@ -338,6 +364,7 @@ export default function BoardTableView({
                           onBoardColumnNameChange?.(col.id, e.target.value)
                         }
                         aria-label={`Column name: ${col.name}`}
+                        disabled={boardLocked}
                       />
                       {board.columns.length > 1 ? (
                         <button
@@ -345,6 +372,7 @@ export default function BoardTableView({
                           className="board-table__col-remove"
                           onClick={() => onRemoveBoardColumn?.(col.id)}
                           aria-label={`Remove column ${col.name}`}
+                          disabled={boardLocked}
                         >
                           <BoardColumnRemoveIcon />
                         </button>
@@ -368,6 +396,7 @@ export default function BoardTableView({
                       placeholder="Column name"
                       aria-label="New column name"
                       autoFocus
+                      disabled={boardLocked}
                     />
                   ) : (
                     <button
@@ -378,6 +407,7 @@ export default function BoardTableView({
                         setNewColumnName("")
                       }}
                       aria-label="Add column"
+                      disabled={boardLocked}
                     >
                       +
                     </button>
@@ -397,6 +427,8 @@ export default function BoardTableView({
                       aria-expanded={boardMenuOpen}
                       aria-haspopup="menu"
                       aria-label="Board actions"
+                      disabled={boardLocked}
+                      aria-busy={boardLocked ? "true" : undefined}
                     >
                       <BoardMoreIcon />
                     </button>
@@ -415,13 +447,12 @@ export default function BoardTableView({
                         <li role="none">
                           <button
                             type="button"
-                            className="board-actions__menu-item board-actions__menu-item--disabled"
+                            className="board-actions__menu-item board-actions__menu-item--danger"
                             role="menuitem"
-                            disabled
-                            aria-disabled="true"
-                            title="Coming soon"
+                            onClick={handleBoardMenuDelete}
+                            disabled={boardLocked}
                           >
-                            Delete Board
+                            {boardLocked ? "Deleting…" : "Delete Board"}
                           </button>
                         </li>
                       </ul>
@@ -622,7 +653,7 @@ export default function BoardTableView({
             type="button"
             className="dashboard-accent-btn"
             onClick={onSaveBoardEdit}
-            disabled={!canSaveBoardEdit || savingBoardEdit}
+            disabled={!canSaveBoardEdit || savingBoardEdit || boardLocked}
             aria-busy={savingBoardEdit ? "true" : undefined}
           >
             {savingBoardEdit ? "Saving…" : "Save Changes"}
@@ -631,7 +662,7 @@ export default function BoardTableView({
             type="button"
             className="board-table__cancel-edit"
             onClick={onCancelBoardEdit}
-            disabled={savingBoardEdit}
+            disabled={savingBoardEdit || boardLocked}
           >
             Cancel
           </button>
@@ -648,7 +679,7 @@ export default function BoardTableView({
             type="button"
             className="dashboard-accent-btn"
             onClick={onEnableEntries}
-            disabled={isEditingBoard}
+            disabled={isEditingBoard || boardLocked}
           >
             Start adding entries
           </button>
@@ -661,10 +692,27 @@ export default function BoardTableView({
           className="board-table__add-row btn btn-secondary"
           ref={addRowButtonRef}
           onClick={onAddRow}
-          disabled={isEditingBoard}
+          disabled={isEditingBoard || boardLocked}
         >
           + Add New Entry
         </button>
+      ) : null}
+
+      {deleteBoardError ? (
+        <p className="auth-form-error board-table__save-error" role="alert">
+          {deleteBoardError}
+        </p>
+      ) : null}
+
+      {boardLocked ? (
+        <div
+          className="board-table__deleting-overlay"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <p className="board-table__deleting-overlay-text">Deleting board…</p>
+        </div>
       ) : null}
     </div>
   )

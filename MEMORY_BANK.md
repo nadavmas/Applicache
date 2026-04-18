@@ -129,6 +129,7 @@ Update this section only when explicitly requested.
 | **Board metadata editing (PATCH `/boards/{boardId}`)**: SAM **`UpdateBoard`** event on **`BoardsFunction`** (**`PATCH`** + path **`/boards/{boardId}`**); CORS already included **`PATCH`**. Lambda **`PATCH`** split by path: **no `rowId`** → update board **`boardName`**, **`columns`**, **`updatedAt`** via **`UpdateItem`** (validate non-empty **`boardName`**, non-empty **`columns`** array, max **64**, each column **`name`** non-empty; assign **`randomUUID()`** when **`id`** missing/blank); **`200`** returns **`buildBoardDto`** merged in memory. **With `rowId`** → existing row PATCH unchanged. **`normalizeColumnsFromPatchBody`** helper; **`MAX_COLUMNS`** shared with create path. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`. |
 | **Board metadata editing (SPA)**: **`updateBoard(boardId, { boardName, columns })`** in **`boardsApi.js`** (**`PATCH`**, Bearer + JSON). **Dashboard**: **`isEditingBoard`**, **`boardEditDraft`**, **`savingBoardEdit`**, **`saveBoardEditError`**; **`boardForTable`** view model; **`canSaveBoardEdit`** (trimmed non-empty board name + every column name non-empty); **`handleSaveBoardEdit`** / cancel; **`handleAddColumn`** branches to append draft column when editing; **`handleRemove`** / rename column drafts; **`handleUpdateBoard`** merges **`boardFromServer`** into **`boards`**. **Mutual exclusion** on **Edit Board**: revert in-progress row edit (same as cancel), drop **`pendingSave`** draft rows, then open board edit. Row/cell/entry actions gated while **`isEditingBoard`**; **`activeBoardId`** change clears board edit state. | 2026-04-17 | `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`. |
 | **Board metadata editing (UI)**: Board title (**`h2`** / input) **above** the table; **⋯** board actions menu (**Edit Board** / **Delete Board** disabled, “coming soon”) in the **thead** row **aligned with column headers** (after data + optional **+** column, before row-actions column); empty body cell uses **`board-table__td--board-menu-spacer`** (no **`--pad`** muted fill) so the spacer matches row striping. Edit mode: column header inputs with **remove** (**`×`**) when **>1** column, **Save Changes** / **Cancel**, **`.board-table__board-edit-input`** hover/focus borders, **`.board-actions`** dropdown styles. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
+| **Delete board**: **`DELETE /boards/{boardId}`** — SAM **`DeleteBoard`** + IAM **`dynamodb:DeleteItem`**. Lambda refactors **`DELETE`**: no **`rowId`** → **`DeleteItem`** on **`USER#<sub>`** / **`BOARD#<id>`** with **`ConditionExpression: attribute_exists(PK)`** (idempotent 404 via **`ConditionalCheckFailedException`**); **`204`** via **`noContent()`** with **same CORS headers** as JSON responses (explicit origin, not `*`). Entry delete unchanged when **`rowId`** present. SPA: **`deleteBoard`**, confirm, **`deletingBoardId`** + overlay + **`boardInteractionsLocked`** (sidebar + handlers), remove deleted board from state; empty copy when **`boards.length === 0`**. | 2026-04-18 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `DashboardSidebar.jsx`, `styles.css`. |
 
 ### Recent work log (since last backlog snapshot)
 
@@ -240,8 +241,30 @@ Work in this stream builds on **`POST /boards/{boardId}/entries`** (documented a
 
 - **Board table UI**  
   - Board title remains above the grid; **⋯** menu sits in the **header row** with column titles (not beside the title).  
-  - Edit mode: rename board, rename/reorder/add/remove columns (minimum one column); **Delete Board** remains disabled in the menu.  
+  - Edit mode: rename board, rename/reorder/add/remove columns (minimum one column); **Delete Board** was a disabled placeholder until the **2026-04-18** delete-board work (see below).  
   - **Fix**: spacer cell under the ⋯ column uses **`board-table__td--board-menu-spacer`** instead of **`board-table__td--pad`** so it does not inherit the muted gray background used for the **+** column spacer.
+
+**2026-04-18 — Delete board (API + dashboard)**
+
+- **API / IaC**  
+  - **`DELETE /boards/{boardId}`** on the existing REST API and **`BoardsFunction`** (**`DeleteBoard`** event).  
+  - IAM: **`dynamodb:DeleteItem`** on **`AppliCacheData`**.
+
+- **Lambda (`boards/index.js`)**  
+  - **`DELETE`** branches on path: **`rowId` absent** → delete the whole board item (embedded **`rows`** live on the same item, so one **`DeleteItem`** removes the board and all jobs).  
+  - **`DeleteItem`** uses **`ConditionExpression: attribute_exists(PK)`** so a missing item returns **`404`** (**`ConditionalCheckFailedException`**) instead of a silent success.  
+  - **`204 No Content`** returned via **`noContent()`**, spreading the same **`corsHeaders`** as **`json()`** so browsers do not block the response (explicit **`Access-Control-Allow-Origin`** aligned with other routes; not `*` + credentials).
+
+- **Frontend API**  
+  - **`deleteBoard(boardId)`**: **`DELETE`**, Bearer id token, handles **`204`** empty body.
+
+- **Dashboard**  
+  - **`handleDeleteBoard`**: **`window.confirm`** with destructive copy; **`deleteBoard`** then filter **`boards`**; existing **`useEffect`** on **`boards` / `activeBoardId`** picks another board or clears selection.  
+  - **`deletingBoardId`**, **`deleteBoardError`**; **`boardInteractionsLocked`** guards board-related handlers; **`DashboardSidebar`** disables list + create while delete runs.  
+  - Empty state when no boards: **“You have no boards yet. Create one from the sidebar to get started.”** (when not loading).
+
+- **`BoardTableView`**  
+  - **Delete Board** menu item enabled (**`.board-actions__menu-item--danger`**), **`onDeleteBoard`**; full-table **deleting overlay** and disabled controls while **`deletingBoardId === board.id`**.
 
 ## Update Policy
 

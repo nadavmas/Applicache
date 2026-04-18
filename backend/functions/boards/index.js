@@ -4,6 +4,7 @@ const {
   GetItemCommand,
   PutItemCommand,
   UpdateItemCommand,
+  DeleteItemCommand,
 } = require("@aws-sdk/client-dynamodb")
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
 const { randomUUID } = require("crypto")
@@ -28,6 +29,13 @@ const json = (statusCode, body) => ({
     "Content-Type": "application/json",
   },
   body: JSON.stringify(body),
+})
+
+/** 204 responses must include the same CORS headers as JSON responses, or the browser blocks the client. */
+const noContent = () => ({
+  statusCode: 204,
+  headers: { ...corsHeaders },
+  body: "",
 })
 
 /** REST API (v1) Cognito pool authorizer: claims map on authorizer */
@@ -598,8 +606,30 @@ exports.handler = async (event) => {
         ? String(event.pathParameters.rowId).trim()
         : ""
 
-    if (!pathBoardId || !pathRowId) {
-      return json(400, { message: "boardId and rowId are required" })
+    if (!pathBoardId) {
+      return json(400, { message: "boardId is required" })
+    }
+
+    // DELETE /boards/{boardId} — remove board item (embedded rows live on the same item)
+    if (!pathRowId) {
+      try {
+        await client.send(
+          new DeleteItemCommand({
+            TableName: tableName,
+            Key: marshall({
+              PK: pk,
+              SK: `BOARD#${pathBoardId}`,
+            }),
+            ConditionExpression: "attribute_exists(PK)",
+          }),
+        )
+      } catch (e) {
+        if (e.name === "ConditionalCheckFailedException") {
+          return json(404, { message: "Board not found" })
+        }
+        throw e
+      }
+      return noContent()
     }
 
     const getRes = await client.send(
