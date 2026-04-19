@@ -4,9 +4,11 @@
 
 ## App View
 ---
-
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="700" alt="AppliCache Dashboard">
+  <img src="docs/screenshots/login.png" width="600" alt="AppliCache Dashboard">
+</p>
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="600" alt="AppliCache Dashboard">
 </p>
 <table style="width:100%">
   <tr>

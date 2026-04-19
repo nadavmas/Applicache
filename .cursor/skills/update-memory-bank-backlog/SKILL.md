@@ -1,11 +1,11 @@
 ---
 name: update-memory-bank-backlog
-description: Appends one table row per completed task to MEMORY_BANK.md Completed Tasks Backlog (ISO date, Notes with file pointers). Use when the user asks to log work in the memory bank, update MEMORY_BANK with what was done, record completed tasks since the last log, or refresh the backlog after shipping work.
+description: Appends one table row per completed task to docs/MEMORY_BANK.md Completed Tasks Backlog (ISO date, Notes with file pointers). Use when the user asks to log work in the memory bank, update MEMORY_BANK with what was done, record completed tasks since the last log, or refresh the backlog after shipping work.
 ---
 
 # Update MEMORY_BANK completed backlog
 
-1. **Gate**: Edit [`MEMORY_BANK.md`](MEMORY_BANK.md) only when the user explicitly asked to log/update it in this turn (see **Update Policy** at file bottom).
+1. **Gate**: Edit [`docs/MEMORY_BANK.md`](../../../docs/MEMORY_BANK.md) only when the user explicitly asked to log/update it in this turn (see **Update Policy** at file bottom).
 
 2. **Find anchor**: Open **Completed Tasks Backlog** (markdown table). Treat **since the last log** as work not yet reflected in that table—use the conversation, recent commits, or the user’s summary.
 
