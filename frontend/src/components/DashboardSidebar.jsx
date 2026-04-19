@@ -147,8 +147,8 @@ export default function DashboardSidebar({
                   onChange={(e) => onCreateTableNameChange?.(e.target.value)}
                   onKeyDown={handleCreateKeyDown}
                   onBlur={handleCreateBlur}
-                  placeholder="Table name"
-                  aria-label="New table name"
+                  placeholder="Board name"
+                  aria-label="New board name"
                   autoFocus
                   disabled={boardInteractionsLocked}
                 />
@@ -179,7 +179,7 @@ export default function DashboardSidebar({
                 disabled={boardsLoading || boardInteractionsLocked}
               >
                 <PlusIcon />
-                Create new table
+                Create new board
               </button>
             )}
           </div>
