@@ -13,7 +13,11 @@ export default function AuthLayout({
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <p className="auth-card__brand">AppliCache</p>
+        <img
+          className="auth-card__logo"
+          src="/applicache_logo.png"
+          alt="AppliCache"
+        />
         <h1 className="auth-card__title">{title}</h1>
         {subtitle ? (
           <p className="auth-card__subtitle">{subtitle}</p>

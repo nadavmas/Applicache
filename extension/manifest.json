@@ -3,6 +3,12 @@
   "name": "AppliCache",
   "version": "1.0.0",
   "description": "Save LinkedIn jobs to your AppliCache dashboard.",
+  "icons": {
+    "16": "applicache_logo.png",
+    "32": "applicache_logo.png",
+    "48": "applicache_logo.png",
+    "128": "applicache_logo.png"
+  },
   "permissions": ["storage", "identity"],
   "externally_connectable": {
     "matches": ["http://localhost:5173/*"]
@@ -13,7 +19,11 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AppliCache"
+    "default_title": "AppliCache",
+    "default_icon": {
+      "16": "applicache_logo.png",
+      "32": "applicache_logo.png"
+    }
   },
   "background": {
     "service_worker": "background.js"

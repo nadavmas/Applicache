@@ -89,7 +89,11 @@ export default function DashboardSidebar({
 
   return (
     <aside className="dashboard-sidebar" aria-label="AppliCache navigation">
-      <p className="dashboard-sidebar__brand">AppliCache</p>
+      <img
+        className="dashboard-sidebar__brand"
+        src="/applicache_logo.png"
+        alt="AppliCache"
+      />
 
       <nav
         className="dashboard-sidebar__primary"

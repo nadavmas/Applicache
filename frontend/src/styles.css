@@ -407,6 +407,9 @@ body {
   max-width: 28rem;
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--radius-lg);
@@ -422,13 +425,31 @@ body {
   }
 }
 
-.auth-card__brand {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 var(--space-2);
+.auth-card__logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto var(--space-5);
+  object-fit: contain;
+  object-position: center;
+}
+
+.auth-card > *:not(.auth-card__logo) {
+  align-self: stretch;
+  width: 100%;
+}
+
+.auth-card > .auth-back {
+  align-self: flex-start;
+  width: auto;
+}
+
+.auth-card__title,
+.auth-card__subtitle,
+.auth-card .auth-form,
+.auth-footer {
+  text-align: left;
 }
 
 .auth-card__title {
@@ -678,13 +699,13 @@ button.auth-link {
 
 .dashboard-sidebar__brand {
   flex-shrink: 0;
-  margin: 0 0 var(--space-5);
-  padding: 0 var(--space-2);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  display: block;
+  width: calc(100% + 2 * var(--space-2));
+  max-width: none;
+  height: auto;
+  margin: 0 calc(-1 * var(--space-2)) var(--space-5);
+  object-fit: contain;
+  object-position: center;
 }
 
 .dashboard-sidebar__primary {
