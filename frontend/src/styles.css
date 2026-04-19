@@ -686,6 +686,11 @@ button.auth-link {
 }
 
 .dashboard-sidebar {
+  --sidebar-nav-text-size: 1.125rem;
+  --sidebar-board-text-size: calc(var(--sidebar-nav-text-size) * 0.875);
+  --sidebar-muted-text-size: calc(var(--sidebar-board-text-size) * 13 / 14);
+  --sidebar-micro-text-size: calc(var(--sidebar-board-text-size) * 6 / 7);
+
   width: 260px;
   flex-shrink: 0;
   display: flex;
@@ -728,15 +733,15 @@ button.auth-link {
   display: block;
   width: 100%;
   margin: 0;
-  padding: 0.625rem 0.875rem;
+  padding: 0.75rem 0.875rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--sidebar-nav-text-size);
   font-weight: 500;
   color: var(--text-secondary);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-out),
@@ -808,6 +813,7 @@ button.auth-link {
 .dashboard-sidebar__item {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   width: 100%;
   margin: 0;
@@ -816,10 +822,10 @@ button.auth-link {
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--sidebar-board-text-size);
   font-weight: 500;
   color: var(--text-secondary);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-out),
@@ -830,6 +836,7 @@ button.auth-link {
 .dashboard-sidebar__item-label {
   min-width: 0;
   flex: 1;
+  text-align: center;
 }
 
 .dashboard-sidebar__item--draft {
@@ -838,7 +845,7 @@ button.auth-link {
 
 .dashboard-sidebar__draft-badge {
   font-weight: 400;
-  font-size: 0.8125rem;
+  font-size: var(--sidebar-muted-text-size);
   color: var(--muted);
 }
 
@@ -873,6 +880,7 @@ button.auth-link {
 .dashboard-sidebar__create {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   width: 100%;
   margin: 0;
@@ -881,10 +889,10 @@ button.auth-link {
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--sidebar-board-text-size);
   font-weight: 500;
   color: var(--accent);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-out),
@@ -929,16 +937,18 @@ button.auth-link {
 .dashboard-sidebar__footer-error {
   margin: var(--space-2) 0 0;
   padding: 0 var(--space-2);
-  font-size: 0.8125rem;
+  font-size: var(--sidebar-muted-text-size);
+  text-align: center;
 }
 
 .dashboard-sidebar__loading-hint {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   margin: 0 0 var(--space-4);
   padding: 0 var(--space-2);
-  font-size: 0.8125rem;
+  font-size: var(--sidebar-muted-text-size);
   color: var(--muted);
 }
 
@@ -959,7 +969,8 @@ button.auth-link {
 .dashboard-sidebar__create-error {
   margin: var(--space-3) 0 0;
   padding: 0 var(--space-2);
-  font-size: 0.75rem;
+  font-size: var(--sidebar-micro-text-size);
+  text-align: center;
 }
 
 .dashboard-main__api-error {
@@ -1122,7 +1133,8 @@ button.auth-link {
 .dashboard-sidebar__create-input {
   width: 100%;
   padding: 10px 12px;
-  font-size: 0.875rem;
+  font-size: var(--sidebar-board-text-size);
+  text-align: left;
 }
 
 .dashboard-sidebar__create-form {
@@ -1136,6 +1148,7 @@ button.auth-link {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
 }
 
@@ -1148,7 +1161,7 @@ button.auth-link {
   background: var(--accent);
   color: #fff;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--sidebar-muted-text-size);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1177,7 +1190,7 @@ button.auth-link {
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--sidebar-muted-text-size);
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
