@@ -62,11 +62,18 @@ function getSignedInDisplayName(data) {
 }
 
 function getAppOrigin() {
-  const origin =
+  const raw =
     typeof globalThis !== "undefined" && globalThis.APPLICACHE_APP_ORIGIN
       ? globalThis.APPLICACHE_APP_ORIGIN
-      : "http://localhost:5173";
-  return String(origin).replace(/\/$/, "");
+      : "";
+  const origin = String(raw).trim().replace(/\/+$/, "");
+  if (!origin) {
+    console.warn(
+      "AppliCache: APPLICACHE_APP_ORIGIN is not set. Ensure extension/config.js loads before popup.js.",
+    );
+    return "";
+  }
+  return origin;
 }
 
 function getApiBase() {
@@ -541,8 +548,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginBtn = document.getElementById("btn-login");
   if (loginBtn) {
     loginBtn.addEventListener("click", () => {
-      const id = chrome.runtime.id;
       const origin = getAppOrigin();
+      if (!origin) return;
+      const id = chrome.runtime.id;
       const url = `${origin}/dashboard?from=extension&extensionId=${encodeURIComponent(id)}`;
       chrome.tabs.create({ url });
     });
@@ -563,7 +571,9 @@ document.addEventListener("DOMContentLoaded", () => {
     viewBoardBtn.addEventListener("click", () => {
       const id = viewBoardBtn.dataset.boardId;
       if (!id) return;
-      const url = `${getAppOrigin()}/dashboard?board=${encodeURIComponent(id)}`;
+      const origin = getAppOrigin();
+      if (!origin) return;
+      const url = `${origin}/dashboard?board=${encodeURIComponent(id)}`;
       chrome.tabs.create({ url });
     });
   }

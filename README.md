@@ -133,7 +133,7 @@ You need a deployed (or locally emulated) backend and Cognito values before the 
 
 ### Chrome extension (load unpacked)
 
-The extension is plain MV3 assets under `extension/` (no separate build step). It reads the API base URL from a generated file so it stays aligned with the web app.
+The extension is plain MV3 assets under `extension/` (no separate build step). It reads the API base URL from a generated file so it stays aligned with the web app. For **local vs production** “open dashboard” / login tab URLs, edit **`extension/config.js`**: set **`IS_DEV`** to `true` for Vite on `http://localhost:5173`, or `false` for production; set **`APPLICACHE_PROD_APP_ORIGIN`** to your canonical SPA URL (no trailing slash), then reload the extension in `chrome://extensions`.
 
 1. **Generate `extension/env.local.js`** after `frontend/.env.local` contains a valid `VITE_API_URL`:
 
@@ -145,7 +145,7 @@ The extension is plain MV3 assets under `extension/` (no separate build step). I
 
 2. **Load the extension in Chrome**: open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and choose the **`extension`** folder in this repo (the directory that contains `manifest.json`).
 
-3. **Connect auth to the extension**: Sign in to AppliCache in the **same browser** at your SPA origin (e.g. **http://localhost:5173** or your **Vercel** URL). The SPA passes Cognito tokens to the extension; `extension/manifest.json` `externally_connectable` and `extension/config.js` `APPLICACHE_ALLOWED_ORIGINS` must include that origin. `APPLICACHE_APP_ORIGIN` defaults to the first entry in `config.js` (localhost for dev); change it if your primary app URL is production-only.
+3. **Connect auth to the extension**: Sign in to AppliCache in the **same browser** at your SPA origin (e.g. **http://localhost:5173** or your **Vercel** URL). The SPA passes Cognito tokens to the extension; `extension/manifest.json` `externally_connectable` and `extension/config.js` `APPLICACHE_ALLOWED_ORIGINS` must include that origin. **`APPLICACHE_APP_ORIGIN`** is chosen from **`IS_DEV`** and **`APPLICACHE_PROD_APP_ORIGIN`** in `extension/config.js` (see paragraph above).
 
 4. **Use it on LinkedIn**: Open a job page on **https://www.linkedin.com**, click the AppliCache toolbar icon, pick a board, and use **Cache this application** / **Save to Board**. If API calls fail, confirm `host_permissions` in `manifest.json` covers your API host (the template uses `*.execute-api.us-east-1.amazonaws.com`; adjust the region pattern if your API is elsewhere).
 
