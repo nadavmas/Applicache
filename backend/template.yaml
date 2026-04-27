@@ -46,7 +46,11 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "${AWS::StackName}-resumes-${AWS::AccountId}"
+      # S3 bucket names must be DNS-compliant and lowercase only; do not use AWS::StackName (often mixed case).
+      BucketName: !Sub
+        - "applicache-r-${Acct}-${StackUid}"
+        - Acct: !Ref AWS::AccountId
+          StackUid: !Select [2, !Split ["/", !Ref AWS::StackId]]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
