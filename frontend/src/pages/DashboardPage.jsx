@@ -14,6 +14,15 @@ import {
   updateBoard,
   updateBoardEntry,
 } from "../api/boardsApi";
+import {
+  createResumeMetadata,
+  getResumeUploadUrl,
+  isResumesApiConfigured,
+  listResumes,
+  resolveResumeContentType,
+  resumeFromServer,
+  uploadFileToS3,
+} from "../api/resumesApi";
 import DashboardSidebar from "../components/DashboardSidebar";
 import BoardTableView from "../components/BoardTableView";
 import {
@@ -64,6 +73,11 @@ export default function DashboardPage() {
 
   const [deletingBoardId, setDeletingBoardId] = useState(null);
   const [deleteBoardError, setDeleteBoardError] = useState("");
+
+  const [resumes, setResumes] = useState([]);
+  const [resumesLoading, setResumesLoading] = useState(false);
+  const [resumesLoadError, setResumesLoadError] = useState("");
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
 
   const handleFocusAfterDeleteComplete = useCallback(() => {
     setFocusAfterDelete(null);
@@ -137,6 +151,34 @@ export default function DashboardPage() {
   }, [status]);
 
   useEffect(() => {
+    if (status !== "authed" || !isResumesApiConfigured()) {
+      return undefined;
+    }
+    let cancelled = false;
+    setResumesLoading(true);
+    setResumesLoadError("");
+    listResumes()
+      .then((data) => {
+        if (cancelled) return;
+        const rows = (data.resumes ?? []).map((r) => resumeFromServer(r));
+        setResumes(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setResumesLoadError(
+            err instanceof Error ? err.message : "Failed to load resumes.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setResumesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  useEffect(() => {
     if (boardsLoading) return;
     if (boards.length === 0) {
       setActiveBoardId(null);
@@ -167,8 +209,33 @@ export default function DashboardPage() {
 
   const boardInteractionsLocked = deletingBoardId != null;
 
-  const handleAddResume = () => {
-    console.log("[dashboard] add resume (placeholder)");
+  const handleAddResume = async (file) => {
+    if (!isResumesApiConfigured()) {
+      console.error("VITE_API_URL is not set; cannot upload resume");
+      return;
+    }
+    setIsUploadingResume(true);
+    try {
+      const contentType = resolveResumeContentType(file);
+      const presign = await getResumeUploadUrl(file.name, contentType);
+      await uploadFileToS3(presign.uploadUrl, file, presign.contentType);
+      const metadata = await createResumeMetadata(
+        presign.resumeId,
+        file.name,
+        presign.s3Key,
+        presign.contentType,
+      );
+      setResumes((prev) => {
+        const next = resumeFromServer(metadata);
+        if (prev.some((x) => x.id === next.id)) return prev;
+        return [next, ...prev];
+      });
+    } catch (err) {
+      console.error("Resume upload failed", err);
+      alert("Failed to upload resume. Please try again.");
+    } finally {
+      setIsUploadingResume(false);
+    }
   };
 
   const handleSelectBoard = (boardId) => {
@@ -772,7 +839,9 @@ export default function DashboardPage() {
         onSignOut={handleSignOut}
         signingOut={signingOut}
         logoutError={logoutError}
-        resumes={[]}
+        resumes={resumes}
+        resumesLoading={resumesLoading}
+        isUploadingResume={isUploadingResume}
         onAddResume={handleAddResume}
       />
       <main className="dashboard-main">
@@ -786,6 +855,11 @@ export default function DashboardPage() {
           {boardsLoadError ? (
             <p className="auth-form-error dashboard-main__api-error" role="alert">
               {boardsLoadError}
+            </p>
+          ) : null}
+          {resumesLoadError ? (
+            <p className="auth-form-error dashboard-main__api-error" role="alert">
+              {resumesLoadError}
             </p>
           ) : null}
           {activeBoard ? (

@@ -373,6 +373,32 @@ Resources:
             Auth:
               Authorizer: NONE
 
+  ListResumesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ListResumes"
+      Description: List resume metadata for the current user (DynamoDB query)
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/resumes/list/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppliCacheData
+          CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource: !GetAtt AppliCacheData.Arn
+      Events:
+        ListResumes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes
+            Method: GET
+
 Outputs:
   AppliCacheDataTableName:
     Description: Single-table DynamoDB name (PK/SK)

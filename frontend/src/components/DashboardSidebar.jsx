@@ -19,6 +19,26 @@ const PlusIcon = () => (
   </svg>
 )
 
+const UploadIcon = () => (
+  <svg
+    className="dashboard-sidebar__create-icon"
+    width={18}
+    height={18}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path
+      d="M12 16V5M8 9l4-4 4 4M4 20h16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 const ResumeDocumentIcon = () => (
   <svg
     className="dashboard-sidebar__resume-item-icon"
@@ -65,10 +85,13 @@ export default function DashboardSidebar({
   signingOut = false,
   logoutError = "",
   resumes = [],
+  resumesLoading = false,
+  isUploadingResume = false,
   onAddResume,
   onSelectResume,
 }) {
   const createEscapeRef = useRef(false)
+  const resumeFileInputRef = useRef(null)
   const [isBoardsExpanded, setIsBoardsExpanded] = useState(
     () => Boolean(activeBoardId),
   )
@@ -92,15 +115,26 @@ export default function DashboardSidebar({
     setIsResumesExpanded((prev) => !prev)
   }
 
-  const handleAddResumeClick = () => {
-    setIsResumesExpanded(true)
-    onAddResume?.()
+  const MAX_RESUME_BYTES = 10 * 1024 * 1024
+
+  const handleUploadResumeClick = () => {
+    resumeFileInputRef.current?.click()
   }
 
-  const handleAddResumeKeyDown = (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return
-    e.preventDefault()
-    handleAddResumeClick()
+  const handleResumeFileChange = (e) => {
+    const input = e.target
+    const file = input.files?.[0]
+    if (!file) {
+      input.value = ""
+      return
+    }
+    if (file.size > MAX_RESUME_BYTES) {
+      window.alert("File is too large. Please choose a file under 10 MB.")
+      input.value = ""
+      return
+    }
+    onAddResume?.(file)
+    input.value = ""
   }
 
   const handleCreateKeyDown = (e) => {
@@ -304,28 +338,25 @@ export default function DashboardSidebar({
         </div>
 
         <div className="dashboard-sidebar__resumes-block">
-          <div className="dashboard-sidebar__resumes-header">
-            <button
-              type="button"
-              id="sidebar-resumes-toggle"
-              className="dashboard-sidebar__nav-link dashboard-sidebar__resumes-toggle"
-              aria-expanded={isResumesExpanded}
-              aria-controls="dashboard-resumes-panel"
-              onClick={handleToggleResumes}
-            >
-              Resumes
-            </button>
-            <button
-              type="button"
-              className="dashboard-sidebar__resumes-add"
-              aria-label="Add resume"
-              title="Add resume"
-              onClick={handleAddResumeClick}
-              onKeyDown={handleAddResumeKeyDown}
-            >
-              <PlusIcon />
-            </button>
-          </div>
+          <input
+            ref={resumeFileInputRef}
+            type="file"
+            className="visually-hidden"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={handleResumeFileChange}
+          />
+          <button
+            type="button"
+            id="sidebar-resumes-toggle"
+            className="dashboard-sidebar__nav-link dashboard-sidebar__resumes-toggle"
+            aria-expanded={isResumesExpanded}
+            aria-controls="dashboard-resumes-panel"
+            onClick={handleToggleResumes}
+          >
+            Resumes
+          </button>
 
           <div
             className={
@@ -342,7 +373,22 @@ export default function DashboardSidebar({
                 aria-labelledby="sidebar-resumes-toggle"
               >
                 <div className="dashboard-sidebar__resumes-panel-fade">
-                  {resumes.length > 0 ? (
+                  {resumesLoading ? (
+                    <p
+                      className="dashboard-sidebar__loading-hint"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="dashboard-sidebar__loading-label">
+                        Loading resumes
+                      </span>
+                      <span className="page-loading__dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </p>
+                  ) : resumes.length > 0 ? (
                     <ul className="dashboard-sidebar__list">
                       {resumes.map((resume) => (
                         <li key={resume.id}>
@@ -362,13 +408,51 @@ export default function DashboardSidebar({
                   ) : (
                     <div className="dashboard-sidebar__resumes-empty-wrap">
                       <p className="dashboard-sidebar__resumes-empty-title">
-                        No resumes added
+                        {isUploadingResume
+                          ? "Uploading resume…"
+                          : "No resumes added"}
                       </p>
-                      <p className="dashboard-sidebar__resumes-empty-hint">
-                        Click + to upload
-                      </p>
+                      {isUploadingResume ? null : (
+                        <p className="dashboard-sidebar__resumes-empty-hint">
+                          PDF, Word, or DOCX — up to 10 MB
+                        </p>
+                      )}
                     </div>
                   )}
+                  <div
+                    className={
+                      !resumesLoading && resumes.length > 0
+                        ? "dashboard-sidebar__resumes-upload-wrap dashboard-sidebar__resumes-upload-wrap--after-list"
+                        : "dashboard-sidebar__resumes-upload-wrap"
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="dashboard-sidebar__create dashboard-sidebar__resumes-upload-btn"
+                      onClick={handleUploadResumeClick}
+                      disabled={isUploadingResume || resumesLoading}
+                      aria-busy={isUploadingResume ? "true" : undefined}
+                    >
+                      {isUploadingResume ? (
+                        <>
+                          <span
+                            className="page-loading__dots"
+                            aria-hidden="true"
+                          >
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                          <span>Uploading…</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadIcon />
+                          Upload Resume
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
