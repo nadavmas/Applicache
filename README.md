@@ -105,19 +105,61 @@ docs/screenshots/  # README media (demo GIFs)
 
 ---
 
+## Running the web app and Chrome extension
+
+You need a deployed (or locally emulated) backend and Cognito values before the app and extension can talk to the API. Set `frontend/.env.local` first, then follow the steps below.
+
+### Web app (Vite dev server)
+
+1. **Install dependencies** (once):
+
+   ```bash
+   npm --prefix frontend install
+   ```
+
+2. **Environment**: Copy `frontend/.env.example` to `frontend/.env.local` and fill in:
+
+   - `VITE_AWS_REGION`
+   - `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_USER_POOL_CLIENT_ID`
+   - `VITE_API_URL` — REST API base URL **including** the stage path, **no trailing slash** (for example the `RestApiUrl` value from your SAM stack)
+
+3. **Start the dev server** from the repository root:
+
+   ```bash
+   npm run dev
+   ```
+
+   This runs Vite’s dev server (default **http://localhost:5173**). Open that URL in Chrome, sign up or sign in, and use the dashboard as usual.
+
+### Chrome extension (load unpacked)
+
+The extension is plain MV3 assets under `extension/` (no separate build step). It reads the API base URL from a generated file so it stays aligned with the web app.
+
+1. **Generate `extension/env.local.js`** after `frontend/.env.local` contains a valid `VITE_API_URL`:
+
+   ```bash
+   npm run sync-extension-env
+   ```
+
+   This writes `extension/env.local.js` (gitignored) with `APPLICACHE_API_BASE_URL` matching `VITE_API_URL`. Re-run this script whenever you change the API URL.
+
+2. **Load the extension in Chrome**: open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and choose the **`extension`** folder in this repo (the directory that contains `manifest.json`).
+
+3. **Connect auth to the extension**: Sign in to AppliCache in the **same browser** at **http://localhost:5173** (the dev origin). The SPA passes Cognito tokens to the extension; `extension/manifest.json` `externally_connectable` and `extension/config.js` `APPLICACHE_ALLOWED_ORIGINS` must include that origin. For a hosted SPA, add your production URL in both places.
+
+4. **Use it on LinkedIn**: Open a job page on **https://www.linkedin.com**, click the AppliCache toolbar icon, pick a board, and use **Cache this application** / **Save to Board**. If API calls fail, confirm `host_permissions` in `manifest.json` covers your API host (the template uses `*.execute-api.us-east-1.amazonaws.com`; adjust the region pattern if your API is elsewhere).
+
+---
+
 ## Local development (overview)
 
 1. **Prerequisites**: Node.js (LTS), AWS SAM CLI, an AWS account for deploys, and (for smart-cache) an OpenAI API key if you use that route.
 
-2. **Frontend env**: Copy `frontend/.env.example` to `frontend/.env.local` and set:
-   - `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_USER_POOL_CLIENT_ID` (from your Cognito app client)
-   - `VITE_API_URL` — REST API base URL **including** stage path, **no trailing slash** (see SAM output `RestApiUrl`)
+2. **Frontend env**: Same variables as in [Web app](#web-app-vite-dev-server) — see `frontend/.env.example`.
 
-3. **Run the app**: From the repo root, `npm run dev` runs the Vite dev server (see root `package.json`).
+3. **Run the app and extension**: Follow [Running the web app and Chrome extension](#running-the-web-app-and-chrome-extension) above.
 
-4. **Extension + API URL**: `npm run sync-extension-env` (when configured) keeps the extension’s API base in sync with `frontend/.env.local`.
-
-5. **Deploy / update backend**: Use SAM from `backend/` (`sam build`, `sam deploy`) per your workflow; pass parameters such as `OpenAIApiKey` for smart-cache.
+4. **Deploy / update backend**: Use SAM from `backend/` (`sam build`, `sam deploy`) per your workflow; pass parameters such as `OpenAIApiKey` for smart-cache.
 
 **Production hosting**: The frontend is a static Vite build (`npm run build` → `dist/`). You can host it on **S3 + CloudFront**, **Amplify Hosting**, **Vercel**, or similar—configure **CORS** on API Gateway for your real web origin (the template currently targets local dev for `AllowOrigin`; update for production).
 
