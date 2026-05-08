@@ -113,8 +113,9 @@ exports.handler = async (event) => {
     return json(405, { message: "Method not allowed" })
   }
 
-  const bucket = process.env.RESUMES_BUCKET_NAME
-  if (!bucket) {
+  const rawBucket = process.env.RAW_BUCKET_NAME
+  const processedBucket = process.env.PROCESSED_BUCKET_NAME
+  if (!rawBucket || !processedBucket) {
     return json(500, { message: "Server configuration error" })
   }
 
@@ -157,7 +158,7 @@ exports.handler = async (event) => {
   const s3Key = `USER#${sub}/${resumeId}_${safeFileName}`
 
   const cmd = new PutObjectCommand({
-    Bucket: bucket,
+    Bucket: rawBucket,
     Key: s3Key,
     ContentType: contentTypeRaw,
   })

@@ -131,8 +131,9 @@ exports.handler = async (event) => {
   }
 
   const tableName = process.env.TABLE_NAME
-  const bucket = process.env.RESUMES_BUCKET_NAME
-  if (!tableName || !bucket) {
+  const rawBucket = process.env.RAW_BUCKET_NAME
+  const processedBucket = process.env.PROCESSED_BUCKET_NAME
+  if (!tableName || !rawBucket || !processedBucket) {
     return json(500, { message: "Server configuration error" })
   }
 
@@ -188,7 +189,7 @@ exports.handler = async (event) => {
   try {
     head = await s3.send(
       new HeadObjectCommand({
-        Bucket: bucket,
+        Bucket: rawBucket,
         Key: s3Key,
       }),
     )
@@ -230,6 +231,7 @@ exports.handler = async (event) => {
     contentType,
     sizeBytes,
     uploadedAt,
+    processingStatus: "PROCESSING",
   }
 
   try {

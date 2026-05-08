@@ -41,16 +41,12 @@ Resources:
         - AttributeName: SK
           KeyType: RANGE
 
-  AppliCacheResumesBucket:
+  RawResumesBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      # S3 bucket names must be DNS-compliant and lowercase only; do not use AWS::StackName (often mixed case).
-      BucketName: !Sub
-        - "applicache-r-${Acct}-${StackUid}"
-        - Acct: !Ref AWS::AccountId
-          StackUid: !Select [2, !Split ["/", !Ref AWS::StackId]]
+      BucketName: !Sub "applicache-raw-uploads-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -77,6 +73,25 @@ Resources:
             ExposedHeaders:
               - ETag
             MaxAge: 3000
+
+  ProcessedResumesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "applicache-processed-uploads-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
 
   PostConfirmationFunction:
     Type: AWS::Serverless::Function
@@ -309,14 +324,15 @@ Resources:
       CodeUri: functions/resumes/generateUploadUrl/
       Environment:
         Variables:
-          RESUMES_BUCKET_NAME: !Ref AppliCacheResumesBucket
+          RAW_BUCKET_NAME: !Ref RawResumesBucket
+          PROCESSED_BUCKET_NAME: !Ref ProcessedResumesBucket
           CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
       Policies:
         - Statement:
             - Effect: Allow
               Action:
                 - s3:PutObject
-              Resource: !Sub "${AppliCacheResumesBucket.Arn}/*"
+              Resource: !Sub "${RawResumesBucket.Arn}/*"
       Events:
         ResumeUploadUrl:
           Type: Api
@@ -344,7 +360,8 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref AppliCacheData
-          RESUMES_BUCKET_NAME: !Ref AppliCacheResumesBucket
+          RAW_BUCKET_NAME: !Ref RawResumesBucket
+          PROCESSED_BUCKET_NAME: !Ref ProcessedResumesBucket
           CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
       Policies:
         - Statement:
@@ -356,7 +373,7 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "${AppliCacheResumesBucket.Arn}/*"
+              Resource: !Sub "${RawResumesBucket.Arn}/*"
       Events:
         CreateResume:
           Type: Api
@@ -372,6 +389,35 @@ Resources:
             Method: OPTIONS
             Auth:
               Authorizer: NONE
+
+  ResumeParserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ResumeParser"
+      Description: Parse uploaded resumes locally (PDF/DOCX) and persist text outputs
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/resumes/process/
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          RAW_BUCKET_NAME: !Sub "applicache-raw-uploads-${AWS::AccountId}"
+          PROCESSED_BUCKET_NAME: !Sub "applicache-processed-uploads-${AWS::AccountId}"
+          TABLE_NAME: !Ref AppliCacheData
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Sub "applicache-raw-uploads-${AWS::AccountId}"
+        - S3CrudPolicy:
+            BucketName: !Sub "applicache-processed-uploads-${AWS::AccountId}"
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AppliCacheData
+      Events:
+        FileUploadEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref RawResumesBucket
+            Events: s3:ObjectCreated:*
 
   ListResumesFunction:
     Type: AWS::Serverless::Function
@@ -399,6 +445,50 @@ Resources:
             Path: /resumes
             Method: GET
 
+  DeleteResumeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-DeleteResume"
+      Description: Delete resume metadata and clean up raw/processed objects
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/resumes/delete/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppliCacheData
+          RAW_BUCKET_NAME: !Ref RawResumesBucket
+          PROCESSED_BUCKET_NAME: !Ref ProcessedResumesBucket
+          CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:DeleteItem
+              Resource: !GetAtt AppliCacheData.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource:
+                - !Sub "${RawResumesBucket.Arn}/*"
+                - !Sub "${ProcessedResumesBucket.Arn}/*"
+      Events:
+        DeleteResume:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes/{resumeId}
+            Method: DELETE
+        ResumeItemOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes/{resumeId}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
 Outputs:
   AppliCacheDataTableName:
     Description: Single-table DynamoDB name (PK/SK)
@@ -412,17 +502,29 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-AppliCacheDataTableArn"
 
-  AppliCacheResumesBucketName:
-    Description: S3 bucket for user resume uploads (private; pre-signed URL access later)
-    Value: !Ref AppliCacheResumesBucket
+  RawResumesBucketName:
+    Description: S3 bucket for raw uploaded resumes (private; pre-signed URL access)
+    Value: !Ref RawResumesBucket
     Export:
-      Name: !Sub "${AWS::StackName}-AppliCacheResumesBucketName"
+      Name: !Sub "${AWS::StackName}-RawResumesBucketName"
 
-  AppliCacheResumesBucketArn:
-    Description: ARN of the resumes S3 bucket
-    Value: !GetAtt AppliCacheResumesBucket.Arn
+  RawResumesBucketArn:
+    Description: ARN of the raw resumes S3 bucket
+    Value: !GetAtt RawResumesBucket.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-AppliCacheResumesBucketArn"
+      Name: !Sub "${AWS::StackName}-RawResumesBucketArn"
+
+  ProcessedResumesBucketName:
+    Description: S3 bucket for processed resume artifacts
+    Value: !Ref ProcessedResumesBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessedResumesBucketName"
+
+  ProcessedResumesBucketArn:
+    Description: ARN of the processed resumes S3 bucket
+    Value: !GetAtt ProcessedResumesBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessedResumesBucketArn"
 
   PostConfirmationFunctionArn:
     Description: Post Confirmation Lambda ARN
